@@ -18,6 +18,12 @@ mono_crash.*
 
 # Build results
 build/
+build*/
+[Bb]uild/
+[Bb]uild*/
+cmake-build-*/
+[Oo]ut/[Bb]uild/
+[Oo]ut/[Bb]uild/*
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -341,6 +347,20 @@ ASALocalRun/
 
 # MSBuild Binary and Structured Log
 *.binlog
+
+# CMake / Ninja
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+install_manifest.txt
+build.ninja
+.ninja_deps
+.ninja_log
+rules.ninja
+Testing/
+_deps/
 
 # NVidia Nsight GPU debugger configuration file
 *.nvuser
