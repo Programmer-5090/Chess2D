@@ -1,0 +1,13 @@
+Package: sdl3
+Version: 3.4.2
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 243f3e71f9a42b682a80bf6d4a60c6fa657e4d7372d4ff41cec77ec3fd9bad8d
+Description: Simple DirectMedia Layer is a cross-platform development library designed to provide low level access to audio, keyboard, mouse, joystick, and graphics hardware via OpenGL and Direct3D.
+
+Package: sdl3
+Feature: vulkan
+Architecture: x86-windows
+Multi-Arch: same
+Description: Vulkan functionality for SDL

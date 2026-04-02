@@ -1,0 +1,7 @@
+Package: spirv-cross
+Version: 1.4.341.0
+Depends: spirv-headers, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 483ce2598271413a068d6a371f4212c3bf6b04db87712b8d1d28e3838ced2288
+Description: SPIRV-Cross is a practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages.

@@ -1,0 +1,9 @@
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/SDL3_image-shared.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/uninstall.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/package.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/package_source.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/edit_cache.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/rebuild_cache.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/list_install_components.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/install.dir
+C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/install/local.dir

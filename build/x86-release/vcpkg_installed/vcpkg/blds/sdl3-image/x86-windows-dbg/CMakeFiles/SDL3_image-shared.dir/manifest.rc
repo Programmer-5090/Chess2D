@@ -1,0 +1,2 @@
+#pragma code_page(65001)
+2 /* CREATEPROCESS_MANIFEST_RESOURCE_ID */ 24 /* RT_MANIFEST */ "C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/vcpkg_installed/vcpkg/blds/sdl3-image/x86-windows-dbg/CMakeFiles/SDL3_image-shared.dir/embed.manifest"

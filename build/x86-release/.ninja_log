@@ -1,0 +1,14 @@
+# ninja log v6
+7	36	7968585624355121	C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/CMakeFiles/cmake.verify_globs	b45d1f79d489b508
+64	670	7968585624922806	src/CMakeFiles/Chess2D.dir/chess_engine/piece_list.cpp.obj	813a4fb01442b70c
+55	1112	7968585624822483	src/CMakeFiles/Chess2D.dir/chess_engine/hash_keys.cpp.obj	356d618b1c6bbebb
+72	1245	7968585624995554	src/CMakeFiles/Chess2D.dir/chess_engine/precomp_move_data.cpp.obj	d7ab3d2d55a99689
+38	1426	7968585624662271	src/CMakeFiles/Chess2D.dir/chess2D/board.cpp.obj	628072020d7d582a
+77	1444	7968585625055670	src/CMakeFiles/Chess2D.dir/main.cpp.obj	8dcc3ea3526d51cc
+42	1452	7968585624702300	src/CMakeFiles/Chess2D.dir/chess2D/board_renderer.cpp.obj	9da7ebe41315119e
+51	1508	7968585624782482	src/CMakeFiles/Chess2D.dir/chess_engine/board_state.cpp.obj	4d8a5608a451a539
+59	1559	7968585624872811	src/CMakeFiles/Chess2D.dir/chess_engine/move_generator.cpp.obj	fb573c9fd55c43db
+46	1585	7968585624742432	src/CMakeFiles/Chess2D.dir/chess2D/game_screen.cpp.obj	bc47a738ae4781af
+83	2118	7968585625105708	src/CMakeFiles/Chess2D.dir/__/utils/logger.cpp.obj	8906ad2041a35a5
+88	2444	7968585625155351	src/CMakeFiles/Chess2D.dir/__/utils/profiler.cpp.obj	9d97c4345b8949b4
+2444	3295	7968585648719605	src/Chess2D.exe	989ebab95eab5d7e

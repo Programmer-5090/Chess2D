@@ -1,0 +1,36 @@
+Package: freetype
+Version: 2.13.3
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 9e49b99ffdec9c0a999c5125ee573af28c27ce20e6ebf6a540aa79edbc2efd7d
+Description: A library to render fonts.
+Default-Features: brotli, bzip2, png, zlib
+
+Package: freetype
+Feature: brotli
+Depends: brotli
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support decompression of WOFF2 streams
+
+Package: freetype
+Feature: bzip2
+Depends: bzip2
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support bzip2 compressed fonts.
+
+Package: freetype
+Feature: png
+Depends: libpng
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support PNG compressed OpenType embedded bitmaps.
+
+Package: freetype
+Feature: zlib
+Depends: zlib
+Architecture: x86-windows
+Multi-Arch: same
+Description: Use zlib instead of internal library for DEFLATE

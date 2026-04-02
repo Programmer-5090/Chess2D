@@ -1,0 +1,7 @@
+Package: spirv-headers
+Version: 1.4.341.0
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 5bb0a00f76f1a579b5e17946bbd9fc071a28a70036e8d56294fac4a2cc0fcc8b
+Description: Machine-readable files for the SPIR-V Registry

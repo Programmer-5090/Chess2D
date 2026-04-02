@@ -1,0 +1,366 @@
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 489002d7043be8da9dec66435694874d3311d28955f5d56f340588f7a1e5d8c1
+Status: install ok installed
+
+Package: zlib
+Version: 1.3.1
+Depends: vcpkg-cmake:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 69a00baa3c73da4c181134c8efdd6a32bfef14ac9adaa1105256c4be2c46f190
+Description: A compression library
+Status: install ok installed
+
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 7aa96ffe492e6aeb1b5e6eff79126d8a7b75448996333bd6f404a12f5d6c65c2
+Status: install ok installed
+
+Package: utfcpp
+Version: 4.0.9
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: d330af9935b7282535b4cad04deaf67f9cb4550317ea169dca0448cf8713fa03
+Description: UTF-8 with C++ in a Portable Way
+Status: install ok installed
+
+Package: stb
+Version: 2024-07-29
+Port-Version: 1
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 28a4a7cabc07f59079443de6795f8b5b9986dda3a7a9d8d095040e2218dd35ac
+Description: public domain header-only libraries
+Status: install ok installed
+
+Package: rapidjson
+Version: 2025-02-26
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 474d7fecf4cccd8c2644fd46f17ebe0edb7a36c9ed5a7e9efbd983bbc277590d
+Description: A fast JSON parser/generator for C++ with both SAX/DOM style API <http://rapidjson.org/>
+Status: install ok installed
+
+Package: pugixml
+Version: 1.15
+Port-Version: 1
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 183e499f623ba7fe757094530cbee8cff3e02621ba4dbd1fa1e960653958a68a
+Description: Light-weight, simple and fast XML parser for C++ with XPath support
+Status: install ok installed
+
+Package: polyclipping
+Version: 6.4.2
+Port-Version: 13
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 93081650394ebab70b054050307d82447fca10568b959efbc14305cce8648a5a
+Description: The Clipper library performs clipping and offsetting for both lines and polygons. All four boolean clipping operations are supported - intersection, union, difference and exclusive-or. Polygons can be of any shape including self-intersecting polygons.
+Status: install ok installed
+
+Package: vcpkg-cmake-get-vars
+Version: 2025-05-29
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: f65f87961ff6ddb7822f68cccb9868fba9150b02b04d774fa0fd6e10477b6e7a
+Status: install ok installed
+
+Package: minizip
+Version: 1.3.1
+Port-Version: 1
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows, vcpkg-cmake-get-vars:x64-windows, zlib
+Architecture: x86-windows
+Multi-Arch: same
+Abi: f3415f01bbc80f92709b907c27855ea37d4d5403fc5c9131f9bb0d6f5a5ec6cf
+Description: Minizip zip file manipulation library
+Status: install ok installed
+
+Package: kubazip
+Version: 0.3.6
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 03ca4ad0e1e919f04dc1324797e3e394a9f656db8046bb92402022f9f47546df
+Description: A portable, simple zip library written in C
+Status: install ok installed
+
+Package: jhasse-poly2tri
+Version: 2023-12-27
+Port-Version: 2
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: b3a4320c8a8301ba743d49e828275cb1b1bcfd190e9446dd54cc51fa8d65221c
+Description: Sweep-line algorithm for constrained Delaunay triangulation
+Status: install ok installed
+
+Package: draco
+Version: 1.5.7
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 0be50fc67a1cd2a4faff6112f2eb94407e410a734b25cf6805e042c9e99cca58
+Description: A library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and transmission of 3D graphics.
+Status: install ok installed
+
+Package: assimp
+Version: 6.0.4
+Depends: draco, jhasse-poly2tri, kubazip, minizip, polyclipping, pugixml, rapidjson, stb, utfcpp, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows, zlib
+Architecture: x86-windows
+Multi-Arch: same
+Abi: dd112f77aa091f6183981c3ea5ef2236f2028bf8833b32ed61da22b4236b4c12
+Description: The Open Asset import library
+Status: install ok installed
+
+Package: egl-registry
+Version: 2025-05-27
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 038b1796fb0ba9d588dc8d3012d762e1670e8e94c2bed3fbf696b311dd8df427
+Description: EGL API and Extension Registry
+Status: install ok installed
+
+Package: opengl-registry
+Version: 2026-01-26
+Depends: egl-registry
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 9a4470a9ecb02fb9a71f9cde3ede03274533ec9f09e4246b28bbd21aea6c81e0
+Description: OpenGL, OpenGL ES, and OpenGL ES-SC API and Extension Registry
+Status: install ok installed
+
+Package: glad
+Version: 0.1.36
+Depends: egl-registry, opengl-registry, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: ac58a858774eb416c72fe9d15713ea7982ca02e3015f7b44f3a18dc4846a8ceb
+Description: Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.
+Default-Features: loader
+Status: install ok installed
+
+Package: glad
+Feature: loader
+Architecture: x86-windows
+Multi-Arch: same
+Description: Generate loader logic.
+Status: install ok installed
+
+Package: glm
+Version: 1.0.3
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 315247652ce735d50142a0f3b1f9ea50fbe08704a5c15703402fb9c269a08aa0
+Description: OpenGL Mathematics (GLM)
+Status: install ok installed
+
+Package: sdl3
+Version: 3.4.2
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 243f3e71f9a42b682a80bf6d4a60c6fa657e4d7372d4ff41cec77ec3fd9bad8d
+Description: Simple DirectMedia Layer is a cross-platform development library designed to provide low level access to audio, keyboard, mouse, joystick, and graphics hardware via OpenGL and Direct3D.
+Status: install ok installed
+
+Package: sdl3
+Feature: vulkan
+Architecture: x86-windows
+Multi-Arch: same
+Description: Vulkan functionality for SDL
+Status: install ok installed
+
+Package: imgui
+Version: 1.92.6
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 0711364f31c8ccdd98535ff28152e70338fd90f893f548101878b7af54f859ca
+Description: Bloat-free Immediate Mode Graphical User interface for C++ with minimal dependencies.
+Status: install ok installed
+
+Package: imgui
+Feature: opengl3-binding
+Architecture: x86-windows
+Multi-Arch: same
+Description: Make available OpenGL3/ES/ES2 (modern) binding
+Status: install ok installed
+
+Package: imgui
+Feature: sdl3-binding
+Depends: sdl3
+Architecture: x86-windows
+Multi-Arch: same
+Description: Make available SDL3 binding
+Status: install ok installed
+
+Package: libpng
+Version: 1.6.55
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows, zlib
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 6771dc0675539813b4c8b9f4cd16d34ff52f2264f8927752b2307dbea96d35d5
+Description: libpng is a library implementing an interface for reading and writing PNG (Portable Network Graphics) format files
+Status: install ok installed
+
+Package: libjpeg-turbo
+Version: 3.1.3
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 531930a097a27c422aa7a1f3da181687b9ab21893e0ed032eff9fb2543843e76
+Description: libjpeg-turbo is a JPEG image codec that uses SIMD instructions (MMX, SSE2, NEON, AltiVec) to accelerate baseline JPEG compression and decompression on x86, x86-64, ARM, and PowerPC systems.
+Status: install ok installed
+
+Package: sdl3-image
+Version: 3.4.0
+Depends: sdl3, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: d92b7b1d80260ea82d6dc9f7d611081a4c6e401424a995b678dee0726cc25f54
+Description: SDL_image is an image file loading library. It loads images as SDL surfaces and textures, and supports the following formats: BMP, GIF, JPEG, LBM, PCX, PNG, PNM, TGA, TIFF, WEBP, XCF, XPM, XV
+Status: install ok installed
+
+Package: sdl3-image
+Feature: jpeg
+Depends: libjpeg-turbo
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support for JPEG image format
+Status: install ok installed
+
+Package: sdl3-image
+Feature: png
+Depends: libpng
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support for PNG image format
+Status: install ok installed
+
+Package: spirv-headers
+Version: 1.4.341.0
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: aa13fa0d1f3910cb0fd4ea117b2e22d453ac7d5e1f3c6c28f806d2a376505627
+Description: Machine-readable files for the SPIR-V Registry
+Status: install ok installed
+
+Package: spirv-cross
+Version: 1.4.341.0
+Depends: spirv-headers, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: cee609ce2ee93511edc649b24f29057581ed95ba3f541225e47a91987d416378
+Description: SPIRV-Cross is a practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages.
+Status: install ok installed
+
+Package: directx-dxc
+Version: 2026-02-20
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: ebb6f26660a04c49238cb0c81228a1b33f824a1bd813ce85fac442a6a2f09cb0
+Description: DirectX Shader Compiler (LLVM/Clang)
+Status: install ok installed
+
+Package: sdl3-shadercross
+Version: 3.0.0-preview1
+Depends: directx-dxc, sdl3, spirv-cross, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: dd07bd89cdf3fcc34b8a8f02a0dde699a218a457fb1491e7fe85b599296cd7ed
+Description: This is a library for translating shaders to different formats, intended for use with SDL's GPU API. It takes SPIRV or HLSL as the source and outputs DXBC, DXIL, SPIRV, MSL, or HLSL.
+Status: install ok installed
+
+Package: bzip2
+Version: 1.0.8
+Port-Version: 6
+Depends: vcpkg-cmake:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: c6abb31ad6a27983d568c8f55c09a0e506014251fc3b7b664d69818b2c22359f
+Description: bzip2 is a freely available, patent free, high-quality data compressor. It typically compresses files to within 10% to 15% of the best available techniques (the PPM family of statistical compressors), whilst being around twice as fast at compression and six times faster at decompression.
+Default-Features: tool
+Status: install ok installed
+
+Package: bzip2
+Feature: tool
+Architecture: x86-windows
+Multi-Arch: same
+Description: Builds bzip2 executable
+Status: install ok installed
+
+Package: brotli
+Version: 1.2.0
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 405f25d477baa149d734f4bf9a95c990ab6a711d5aaacba8f0c296eed74bf635
+Description: a generic-purpose lossless compression algorithm that compresses data using a combination of a modern variant of the LZ77 algorithm, Huffman coding and 2nd order context modeling.
+Status: install ok installed
+
+Package: freetype
+Version: 2.13.3
+Depends: vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: 9e49b99ffdec9c0a999c5125ee573af28c27ce20e6ebf6a540aa79edbc2efd7d
+Description: A library to render fonts.
+Default-Features: brotli, bzip2, png, zlib
+Status: install ok installed
+
+Package: freetype
+Feature: brotli
+Depends: brotli
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support decompression of WOFF2 streams
+Status: install ok installed
+
+Package: freetype
+Feature: bzip2
+Depends: bzip2
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support bzip2 compressed fonts.
+Status: install ok installed
+
+Package: freetype
+Feature: png
+Depends: libpng
+Architecture: x86-windows
+Multi-Arch: same
+Description: Support PNG compressed OpenType embedded bitmaps.
+Status: install ok installed
+
+Package: freetype
+Feature: zlib
+Depends: zlib
+Architecture: x86-windows
+Multi-Arch: same
+Description: Use zlib instead of internal library for DEFLATE
+Status: install ok installed
+
+Package: sdl3-ttf
+Version: 3.2.2
+Port-Version: 1
+Depends: freetype, sdl3, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
+Architecture: x86-windows
+Multi-Arch: same
+Abi: edb2a33b053c03b854b0c9cb703f1acca9d4c4b2c29c81a2d191f3a2b25bcddf
+Description: A library for rendering TrueType fonts with SDL
+Status: install ok installed
+
