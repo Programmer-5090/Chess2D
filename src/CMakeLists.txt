@@ -2,6 +2,14 @@
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(SDL3_ttf REQUIRED CONFIG)
 
+# Download clay header-only library
+include(FetchContent)
+FetchContent_Declare(clay
+    GIT_REPOSITORY https://github.com/nicbarker/clay.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(clay)
+
 # Collect all source files automatically
 file(GLOB_RECURSE CHESS2D_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -21,8 +29,10 @@ target_include_directories(Chess2D PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include/chess_engine"
     "${CMAKE_SOURCE_DIR}/include/chess2D"
+    "${CMAKE_SOURCE_DIR}/include/search"
     "${CMAKE_SOURCE_DIR}/utils/include"
     "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+    "${clay_SOURCE_DIR}"
 )
 
 target_link_libraries(Chess2D PRIVATE

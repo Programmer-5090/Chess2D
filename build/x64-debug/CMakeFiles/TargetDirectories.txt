@@ -1,5 +1,0 @@
-C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x64-debug/CMakeFiles/edit_cache.dir
-C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x64-debug/CMakeFiles/rebuild_cache.dir
-C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x64-debug/src/CMakeFiles/Chess2D.dir
-C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x64-debug/src/CMakeFiles/edit_cache.dir
-C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x64-debug/src/CMakeFiles/rebuild_cache.dir

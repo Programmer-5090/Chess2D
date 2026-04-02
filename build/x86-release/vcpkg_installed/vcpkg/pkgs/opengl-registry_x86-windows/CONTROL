@@ -1,7 +1,0 @@
-Package: opengl-registry
-Version: 2026-01-26
-Depends: egl-registry
-Architecture: x86-windows
-Multi-Arch: same
-Abi: 9a4470a9ecb02fb9a71f9cde3ede03274533ec9f09e4246b28bbd21aea6c81e0
-Description: OpenGL, OpenGL ES, and OpenGL ES-SC API and Extension Registry

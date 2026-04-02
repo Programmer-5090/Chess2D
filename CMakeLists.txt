@@ -13,3 +13,4 @@ project ("Chess2D")
 
 # Include sub-projects.
 add_subdirectory ("src")
+add_subdirectory ("tests")

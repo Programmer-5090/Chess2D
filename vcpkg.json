@@ -1,7 +1,7 @@
 {
   "name": "chess-cpp",
   "version": "0.1.0",
-  "builtin-baseline": "47205630845bd49eaf16cdfb757cf9dfba144c52",
+  "builtin-baseline": "cb2981c4e03d421fa03b9bb5044cd1986180e7e4",
   "dependencies": [
     "sdl3",
     {
@@ -11,18 +11,6 @@
         "jpeg"
       ]
     },
-    "sdl3-ttf",
-    "sdl3-shadercross",
-    "glad",
-    "glm",
-    "stb",
-    "assimp",
-    {
-      "name": "imgui",
-      "features": [
-        "opengl3-binding",
-        "sdl3-binding"
-      ]
-    }
+    "sdl3-ttf"
   ]
 }

@@ -35,6 +35,7 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
   include("C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/src/cmake_install.cmake")
+  include("C:/Users/dimai/Documents/Programming/Programming/Chess2D/build/x86-release/tests/cmake_install.cmake")
 
 endif()
 

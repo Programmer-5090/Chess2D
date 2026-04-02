@@ -1,7 +1,0 @@
-Package: directx-dxc
-Version: 2026-02-20
-Depends: vcpkg-cmake, vcpkg-cmake-config
-Architecture: x64-windows
-Multi-Arch: same
-Abi: 15724890a1111526f4f381d44d1acbb16eb06930b2cdde253a588528ceb29abf
-Description: DirectX Shader Compiler (LLVM/Clang)

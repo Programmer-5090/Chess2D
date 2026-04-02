@@ -1,7 +1,0 @@
-Package: sdl3-shadercross
-Version: 3.0.0-preview1
-Depends: directx-dxc, sdl3, spirv-cross, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows
-Architecture: x86-windows
-Multi-Arch: same
-Abi: dd07bd89cdf3fcc34b8a8f02a0dde699a218a457fb1491e7fe85b599296cd7ed
-Description: This is a library for translating shaders to different formats, intended for use with SDL's GPU API. It takes SPIRV or HLSL as the source and outputs DXBC, DXIL, SPIRV, MSL, or HLSL.

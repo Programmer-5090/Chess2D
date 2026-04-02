@@ -1,7 +1,0 @@
-Package: assimp
-Version: 6.0.4
-Depends: draco, jhasse-poly2tri, kubazip, minizip, polyclipping, pugixml, rapidjson, stb, utfcpp, vcpkg-cmake:x64-windows, vcpkg-cmake-config:x64-windows, zlib
-Architecture: x86-windows
-Multi-Arch: same
-Abi: dd112f77aa091f6183981c3ea5ef2236f2028bf8833b32ed61da22b4236b4c12
-Description: The Open Asset import library
