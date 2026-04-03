@@ -2,11 +2,12 @@
 #include <iostream>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3/SDL.h>
+#include "logger.h"
 
 namespace Chess {
 
     // Convert a grid (row, col) produced by Board::screenToBoardCoords back to a
-    // 0-63 square index, honouring the board-flip state.
+    // 0-63 square index, honoring the board-flip state.
     static int gridToSquare64(int row, int col, bool flipped) {
         const int rank = flipped ? row : (7 - row);
         const int file = flipped ? (7 - col) : col;
@@ -17,8 +18,14 @@ namespace Chess {
     GameWindow::GameWindow(int width, int height)
         : gameBoard(std::min(width, height)), deltaTime(0.0)   // Board is always square
     {
+        if (!Logger::isInitialized()) {
+            Logger::init("logs", LogLevel::DEBUG, false);
+        }
+        LOG_INFO_F("[GameWindow] Creating window %dx%d", width, height);
+
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             std::cerr << "[GameWindow] SDL_Init failed: " << SDL_GetError() << '\n';
+            LOG_ERROR_F("[GameWindow] SDL_Init failed: %s", SDL_GetError());
             running = false;
             return;
         }
@@ -26,6 +33,7 @@ namespace Chess {
         window = SDL_CreateWindow("Chess", width, height, SDL_WINDOW_RESIZABLE);
         if (!window) {
             std::cerr << "[GameWindow] SDL_CreateWindow failed: " << SDL_GetError() << '\n';
+            LOG_ERROR_F("[GameWindow] SDL_CreateWindow failed: %s", SDL_GetError());
             running = false;
             return;
         }
@@ -33,6 +41,7 @@ namespace Chess {
         renderer = SDL_CreateRenderer(window, nullptr);
         if (!renderer) {
             std::cerr << "[GameWindow] SDL_CreateRenderer failed: " << SDL_GetError() << '\n';
+            LOG_ERROR_F("[GameWindow] SDL_CreateRenderer failed: %s", SDL_GetError());
             running = false;
             return;
         }
@@ -47,6 +56,7 @@ namespace Chess {
         else {
             SDL_SetWindowIcon(window, icon);
         }
+        aiSettings.useThreading = true;
     }
 
 
@@ -70,6 +80,8 @@ namespace Chess {
         else if (input.isMouseButtonReleased(SDL_BUTTON_RIGHT)) {
             handleMouseClick(input.getMouseX(), input.getMouseY(), gameBoard, false);
         }
+
+        handleComputerMove();
 
         // Clear screen with a dark gray background
         SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
@@ -97,6 +109,11 @@ namespace Chess {
                 gameBoard.unmakeMove();
                 clearSelection();
             }
+            if (input.keyDown("C")) {
+                computerPlayEnabled = !computerPlayEnabled;
+                std::cout << "[Game] Computer play " << (computerPlayEnabled ? "enabled" : "disabled") << "\n";
+                clearSelection();
+            }
             if (input.keyDown("F")) {
                 gameBoard.setFlipped(!gameBoard.getIsFlipped());
                 clearSelection();
@@ -115,11 +132,15 @@ namespace Chess {
     }
 
     void GameWindow::destroy() {
+        LOG_INFO("[GameWindow] Destroying window");
         if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }
         if (window) { SDL_DestroyWindow(window);     window = nullptr; }
         if (icon) { SDL_DestroySurface(icon);       icon = nullptr; }
         // Quit SDL_image if initialized
         SDL_Quit();
+        if (Logger::isInitialized()) {
+            Logger::shutdown();
+        }
     }
 
     void GameWindow::initializeGame(const std::string& fen) {
@@ -136,6 +157,10 @@ namespace Chess {
 
     void GameWindow::handleMouseClick(int mouseX, int mouseY,
         Board& board, bool leftMouseClicked) {
+        if (computerPlayEnabled && board.getCurrentPlayer() != playerColor) {
+            return;
+        }
+
         // Right-click always clears the selection.
         if (!leftMouseClicked) {
             clearSelection();
@@ -167,6 +192,25 @@ namespace Chess {
             } else {
                 selectedSquare = clickedSquare;
             }
+        }
+    }
+
+    void GameWindow::handleComputerMove() {
+        if (!computerPlayEnabled) return;
+        if (gameBoard.getCurrentPlayer() == playerColor) return;
+
+        const int active = gameBoard.getCurrentPlayer();
+        if (gameBoard.isCheckMate(active) || gameBoard.isStaleMate(active)) {
+            return;
+        }
+
+        BoardState& position = gameBoard.getBoardState();
+        Search search(position, 100, aiSettings);
+        search.runSearch(aiSettings.depth);
+        const Move aiMove = search.getBestMove();
+
+        if (aiMove.isValid()) {
+            makeMove(aiMove, gameBoard);
         }
     }
 

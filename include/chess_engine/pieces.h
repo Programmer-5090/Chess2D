@@ -19,6 +19,25 @@ namespace Chess {
     // WHITE = 0b01000 (bit 3), BLACK = 0b10000 (bit 4)
     constexpr int COLOR_BLACK = 0;
     constexpr int COLOR_WHITE = 1; 
+
+	static int getPieceValue(int pieceType) {
+		switch (pieceType) {
+		case PIECE_KING:
+			return 20000;
+		case PIECE_QUEEN:
+			return 900;
+		case PIECE_ROOK:
+			return 500;
+		case PIECE_BISHOP:
+			return 330;
+		case PIECE_KNIGHT:
+			return 320;
+		case PIECE_PAWN:
+			return 100;
+		default:
+			return 0;
+		}
+	}
 }
 #endif 
 

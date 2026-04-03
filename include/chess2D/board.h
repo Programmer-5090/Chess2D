@@ -65,6 +65,8 @@ namespace Chess {
         int         getCurrentPlayer()  const { return boardState.getSide(); }
         int         getHalfMoveClock()  const { return boardState.getFiftyMove(); }
         int         getFullMoveNumber() const { return boardState.getHisPly(); }
+        BoardState& getBoardState() { return boardState; }
+        const BoardState& getBoardState() const { return boardState; }
     };
 
 } // namespace Chess

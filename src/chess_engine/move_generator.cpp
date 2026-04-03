@@ -6,7 +6,7 @@ namespace Chess {
         PrecomputedMoveData::initialize();
     }
 
-    void MoveGenerator::generateLegalMoves(const BoardState& board, bool genQuiet) {
+    void MoveGenerator::generateLegalMoves(const BoardState& board, bool genQuiet=true) {
         this->board = &board;
         genQuiets = genQuiet;
 

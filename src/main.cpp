@@ -11,8 +11,9 @@
 //   R  – reset to starting position
 //   U  – undo the last move
 //   F  – flip the board (swap white / black perspective)
+//   C  - Toggle Comp Player
 //   ESC – quit
-//   1-6 to change thems and textures
+//   1-6 to change themes and textures
 
 int main(int argc, char* argv[]) {
     // Optional FEN supplied on the command line.

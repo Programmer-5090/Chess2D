@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "board.h"
+#include "search.h"
 
 namespace Chess  {
     class GameWindow {
@@ -26,6 +27,7 @@ namespace Chess  {
 
         void handleMouseClick(int mouseX, int mouseY, Board& board, bool leftMouseClicked);
         void makeMove(const Move& move, Board& board);
+        void handleComputerMove();
 
         const int getSelectedPieceSquare() const;
         void clearSelection();
@@ -37,9 +39,11 @@ namespace Chess  {
         Input input;
         Board gameBoard;
         bool running = true;
+        bool computerPlayEnabled = true;
         double deltaTime;
         int playerColor = COLOR_WHITE;
         int selectedSquare = -1;
+        SearchSettings aiSettings = Search::DefaultSettings();
     };
 }
 
