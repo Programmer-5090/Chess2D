@@ -22,7 +22,6 @@ namespace Chess  {
         void initializeGame(const std::string& fen = "");
         void resetGame();
 
-        // Return a selected move by value. Accept Board& so promotions can be handled by Board.
         const Move pickMove(const std::vector<Move>& moves, int targetSquare);
 
         void handleMouseClick(int mouseX, int mouseY, Board& board, bool leftMouseClicked);
@@ -45,6 +44,5 @@ namespace Chess  {
         int selectedSquare = -1;
         SearchSettings aiSettings = Search::DefaultSettings();
     };
-}
-
+}  // namespace Chess
 #endif // SCREEN_H

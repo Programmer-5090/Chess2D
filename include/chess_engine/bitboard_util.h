@@ -20,13 +20,6 @@
  * Example:
  *   uint64_t whitePawns = 0x000000000000FF00ULL;  // Pawns on rank 1
  *   uint64_t e4Square = 0x0000000010000000ULL;    // e4 = square 28
- * 
- * Why Bitboards?
- * - O(1) operations for checking piece presence
- * - Fast bitwise operations: AND, OR, XOR for move generation
- * - Parallel operations: check multiple squares in one CPU instruction
- * - Cache-friendly: entire board state in one 64-bit value
- * - Performance: essential for high-speed chess engines
  */
 
 #ifndef BITBOARD_UTILS_H
@@ -226,7 +219,5 @@ namespace Chess {
     inline bool none(uint64_t bb) {
         return bb == 0;
     }
-
 }  // namespace Chess
-
 #endif  // BITBOARD_UTILS_H

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <algorithm>
+#include <array>
 
 namespace Chess {
     // Piece type constants (occupies bits 0-2)
@@ -38,6 +39,16 @@ namespace Chess {
 			return 0;
 		}
 	}
-}
+
+    // Explicit LVA order because piece constants are not sorted by value.
+    static constexpr std::array<int, 6> lvaOrder = {
+        PIECE_PAWN,
+        PIECE_KNIGHT,
+        PIECE_BISHOP,
+        PIECE_ROOK,
+        PIECE_QUEEN,
+        PIECE_KING
+    };
+}  // namespace Chess
 #endif 
 

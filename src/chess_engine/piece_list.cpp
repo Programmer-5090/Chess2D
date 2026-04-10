@@ -43,5 +43,4 @@ namespace Chess {
     int PieceList::operator[](int index) const {
         return squares[index];
     }
-
 }  // namespace Chess

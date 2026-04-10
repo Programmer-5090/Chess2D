@@ -70,5 +70,4 @@ namespace Chess {
     };
 
 } // namespace Chess
-
 #endif // BOARD_H

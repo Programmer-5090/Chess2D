@@ -3,9 +3,13 @@
 
 #include <string>
 #include <string_view>
+#include <cstdint>
 
 namespace Chess
 {
+    inline static constexpr uint64_t FILE_A = 0x0101010101010101ULL;
+    inline static constexpr uint64_t FILE_H = 0x8080808080808080ULL;
+
     struct Coord {
         int fileIndex = 0;
         int rankIndex = 0;
@@ -152,7 +156,28 @@ namespace Chess
         {
             return SquareNameFromCoordinate(CoordFromIndex(squareIndex));
         }
+
+        static uint64_t rankMask(int rank) {
+            if (rank < 0 || rank > 7) return 0ULL;
+            return 0xFFULL << (rank * 8);
+        }
+
+        static uint64_t fileMask(int file) {
+            if (file < 0 || file > 7) return 0ULL;
+            return 0x0101010101010101ULL << file;
+        }
+
+        static uint64_t makeSqMask(int fileStart, int fileEnd, int rankStart, int rankEnd) {
+            uint64_t mask = 0ULL;
+            for (int rank = rankStart; rank <= rankEnd; ++rank) {
+                for (int file = fileStart; file <= fileEnd; ++file) {
+                    const int sq = IndexFromCoord(file, rank);
+                    mask |= (1ULL << sq);
+                }
+            }
+            return mask;
+        }
     };
-}
+} // namespace Chess
 
 #endif

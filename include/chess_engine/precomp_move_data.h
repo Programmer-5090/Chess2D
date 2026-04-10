@@ -11,17 +11,6 @@
 namespace Chess
 {
 	class PrecomputedMoveData {
-		/*
-		* 64 Sq Board
-			56, 57, 58, 59, 60, 61, 62, 63
-			48, 49, 50, 51, 52, 53, 54, 55
-			40, 41, 42, 43, 44, 45, 46, 47
-			32, 33, 34, 35, 36, 37, 38, 39
-			24, 25, 26, 27, 28, 29, 30, 31
-			16, 17, 18, 19, 20, 21, 22, 23
-			8 , 9 , 10, 11, 12, 13, 14, 15
-			0 , 1 , 2 , 3 , 4 , 5 , 6 , 7
-		*/
 	public:
 
 		enum Directions {
@@ -37,10 +26,10 @@ namespace Chess
 
 
 		// Get all valid knight moves from a square
-		static std::vector<uint8_t> getKnightMoves(int square);
+		static const std::vector<uint8_t>& getKnightMoves(int square);
 
 		// Get all valid king moves from a square
-		static std::vector<uint8_t> getKingMovesVector(int square);
+		static const std::vector<uint8_t>& getKingMovesVector(int square);
 
 		// Get rook move bitboard for a square
 		static uint64_t getRookMoves(int square);
@@ -51,6 +40,18 @@ namespace Chess
 		// Get queen move bitboard for a square
 		static uint64_t getQueenMoves(int square);
 
+		// Get precomputed relevant blocker mask for rook magic on a square
+		static uint64_t getRookBlockerMask(int square);
+
+		// Get precomputed relevant blocker mask for bishop magic on a square
+		static uint64_t getBishopBlockerMask(int square);
+
+		// Get precomputed shift used in rook magic indexing (64 - relevant bits)
+		static int getRookMagicShift(int square);
+
+		// Get precomputed shift used in bishop magic indexing (64 - relevant bits)
+		static int getBishopMagicShift(int square);
+
 		// Get king move bitboard for a square
 		static uint64_t getKingMoves(int square);
 
@@ -58,10 +59,10 @@ namespace Chess
 		static uint64_t getKnightAttacks(int square);
 
 		// Get pawn attack squares for white pawns
-		static std::vector<int> getPawnAttacksWhite(int square);
+		static const std::vector<int>& getPawnAttacksWhite(int square);
 
 		// Get pawn attack squares for black pawns
-		static std::vector<int> getPawnAttacksBlack(int square);
+		static const std::vector<int>& getPawnAttacksBlack(int square);
 
 		// Get pawn attack bitboard for a given color and square
 		static uint64_t getPawnAttackBitboard(int color, int square);
@@ -73,7 +74,13 @@ namespace Chess
 		static int getKingDistance(int squareA, int squareB);
 
 		// Get Manhattan distance from a square to the board center
-		static int getCentreManhattanDistance(int square);
+		static int getCenterManhattanDistance(int square);
+
+		// Get bitboard of squares strictly between two aligned squares, else 0
+		static uint64_t getBetweenBitboard(int fromSquare, int toSquare);
+
+		// Get bitboard of the aligned segment including endpoints, else 0
+		static uint64_t getLineBitboard(int fromSquare, int toSquare);
 
 		// Check if a move is in a specific direction from a source square
 		static bool isDirectionalMove(int fromSquare, int toSquare, int direction);
@@ -97,43 +104,50 @@ namespace Chess
 		static bool isValidPawnAttack(int fromSquare, int toSquare, int color);
 
 	private:
-		// Static initialization flag
 		static bool initialized;
+
+		static void initializeSquareAndAttackTables();
+		static void initializeDirectionLookupTable();
+		static void initializeDistanceTables();
+		static void initializeLineAndBetweenTables();
+		static void initializeSquareEdges(int square, int x, int y);
+		static void initializeKnightData(int square, int x, int y);
+		static void initializeKingData(int square, int x, int y);
+		static void initializePawnData(int square, int x, int y);
+		static void initializeSlidingData(int square);
 
 		static const std::array<int, 8> allKnightJumps;
 		static std::array<std::array<int, 8>, 64> squareEdges;
 
-		// Direction lookup (for determining direction between two squares)
 		static std::array<int, 127> directionLookup;
 
-		// Arrays for fixed-count moves
 		static std::array<std::vector<uint8_t>, 64> knightMoves;
 		static std::array<std::vector<uint8_t>, 64> kingMoves;
 
-		// Bitboards for sliding pieces (efficient bit operations)
 		static std::array<uint64_t, 64> queenMovesBitboards;
 		static std::array<uint64_t, 64> rookMovesBitboards;
 		static std::array<uint64_t, 64> bishopMoveBitboards;
 
-		// Pawn attack directions for white and black (WHITE(NW, NE); BLACK(SW SE))
+		static std::array<uint64_t, 64> rookBlockerMasks;
+		static std::array<uint64_t, 64> bishopBlockerMasks;
+
+		static std::array<int, 64> rookMagicShifts;
+		static std::array<int, 64> bishopMagicShifts;
+
 		static const std::array<std::array<uint8_t, 2>, 2> pawnAttackDirections;
 
-		// Pawn attack squares
 		static std::array<std::vector<int>, 64> pawnAttacksWhite;
 		static std::array<std::vector<int>, 64> pawnAttacksBlack;
 
-		// Bitboards for attack patterns
 		static std::array<uint64_t, 64> kingAttackBitboards;
 		static std::array<uint64_t, 64> knightAttackBitboards;
-		static std::array<std::array<uint64_t, 64>, 2> pawnAttackBitboards; // [color][square]
+		static std::array<std::array<uint64_t, 64>, 2> pawnAttackBitboards;
 
-		// Distance lookups
 		static std::array<std::array<int, 64>, 64> orthogonalDistance;
 		static std::array<std::array<int, 64>, 64> kingDistance;
-
-		// Distance from center (Manhattan/Taxicab)
-		// Stores distance from square to the board center squares (35, 36, 27, 28 or d4, e4, d5, e5) 
-		static std::array<int, 64> centreManhattanDistance;
+		static std::array<int, 64> centerManhattanDistance;
+		static std::array<std::array<uint64_t, 64>, 64> betweenBitboards;
+		static std::array<std::array<uint64_t, 64>, 64> lineBitboards;
 	};
 
 } // namespace Chess

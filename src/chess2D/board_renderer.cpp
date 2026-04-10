@@ -255,4 +255,4 @@ namespace Chess {
             }
         }
     }
-}
+}  // namespace Chess

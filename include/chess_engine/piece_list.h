@@ -46,5 +46,4 @@ namespace Chess {
     };
 
 }  // namespace Chess
-
 #endif  // PIECE_LIST_H

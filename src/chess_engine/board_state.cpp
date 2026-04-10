@@ -1,5 +1,6 @@
 #include "board_state.h"
 #include "fen_util.h"
+#include "logger.h"
 
 namespace Chess {
 
@@ -225,6 +226,7 @@ namespace Chess {
         historyEntry.previousEnPas = enPas;
         historyEntry.previousFiftyMove = fiftyMove;
         historyEntry.previousCastleRights = castleRights;
+        historyEntry.previousPosKey = posKey;
 
         const int fromFile = BoardRepresentation::FileIndex(fromSquare);
         const int toFile = BoardRepresentation::FileIndex(toSquare);
@@ -255,6 +257,11 @@ namespace Chess {
 
         updateCastlingRights(pieceType, fromFile, fromRank, capturedType, toFile, toRank);
         updateEnPassantSquare(fromSquare, toSquare, pieceType);
+
+        fiftyMove++;
+        if (pieceType == PIECE_PAWN || capturedType != -1) {
+            fiftyMove = 0;
+        }
 
         side ^= 1;
         hisPly++;
@@ -392,7 +399,7 @@ namespace Chess {
         castleRights = historyEntry.previousCastleRights;
         hisPly--;
 
-        posKey = generatePosKey();
+        posKey = historyEntry.previousPosKey;
         moveHistory.pop_back();
 
         return true;
@@ -488,5 +495,125 @@ namespace Chess {
 
     std::string BoardState::getFEN() const {
         return toFENUtil(*this);
+    }
+
+    bool BoardState::isRepetition() const {
+        if (moveHistory.empty()) return false;
+
+        const int maxLookback = std::min(static_cast<int>(moveHistory.size()), fiftyMove);
+        int matches = 0;
+
+        // Count positions with same side to move (step by 2 to maintain alternation)
+        // This correctly detects 3-fold repetition only when positions are truly identical
+        for (int i = 2; i <= maxLookback; i += 2) {
+            const auto& entry = moveHistory[moveHistory.size() - i];
+            if (entry.previousPosKey == posKey) {
+                ++matches;
+                // 3-fold repetition: need 2 prior matches (making 3 total including current)
+                if (matches >= 2) {
+                    LOG_DEBUG_F("[isRepetition] DETECTED: posKey=0x%llx matches=%d hisPly=%d", posKey, matches, hisPly);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    bool BoardState::isInsufficientMaterial() const {
+        const int whitePawns = popCount(pieceBoards[COLOR_WHITE][PIECE_PAWN]);
+        const int blackPawns = popCount(pieceBoards[COLOR_BLACK][PIECE_PAWN]);
+        const int whiteRooks = popCount(pieceBoards[COLOR_WHITE][PIECE_ROOK]);
+        const int blackRooks = popCount(pieceBoards[COLOR_BLACK][PIECE_ROOK]);
+        const int whiteQueens = popCount(pieceBoards[COLOR_WHITE][PIECE_QUEEN]);
+        const int blackQueens = popCount(pieceBoards[COLOR_BLACK][PIECE_QUEEN]);
+
+        if ((whitePawns + blackPawns + whiteRooks + blackRooks + whiteQueens + blackQueens) > 0) {
+            return false;
+        }
+
+        const int whiteKnights = popCount(pieceBoards[COLOR_WHITE][PIECE_KNIGHT]);
+        const int blackKnights = popCount(pieceBoards[COLOR_BLACK][PIECE_KNIGHT]);
+        const int whiteBishops = popCount(pieceBoards[COLOR_WHITE][PIECE_BISHOP]);
+        const int blackBishops = popCount(pieceBoards[COLOR_BLACK][PIECE_BISHOP]);
+
+        auto hasMatingMaterial = [](int bishops, int knights) {
+            if (bishops >= 2) return true;
+            if (bishops >= 1 && knights >= 1) return true;
+            if (knights >= 3) return true;
+            return false;
+        };
+
+        return !hasMatingMaterial(whiteBishops, whiteKnights)
+            && !hasMatingMaterial(blackBishops, blackKnights);
+    }
+
+    void BoardState::printBoardState() {
+        auto pieceChar = [](int pieceType, int color) -> char {
+            switch (pieceType) {
+                case PIECE_KING:   return color == COLOR_WHITE ? 'K' : 'k';
+                case PIECE_QUEEN:  return color == COLOR_WHITE ? 'Q' : 'q';
+                case PIECE_ROOK:   return color == COLOR_WHITE ? 'R' : 'r';
+                case PIECE_BISHOP: return color == COLOR_WHITE ? 'B' : 'b';
+                case PIECE_KNIGHT: return color == COLOR_WHITE ? 'N' : 'n';
+                case PIECE_PAWN:   return color == COLOR_WHITE ? 'P' : 'p';
+                default:           return '?';
+            }
+        };
+
+        std::cout << "\n=== Board State ===\n";
+        for (int rank = 7; rank >= 0; --rank) {
+            std::cout << (rank + 1) << " ";
+            for (int file = 0; file < 8; ++file) {
+                const int sq = BoardRepresentation::IndexFromCoord(file, rank);
+                const int type = getPieceTypeAt(sq);
+                if (type < 0) {
+                    std::cout << ". ";
+                } else {
+                    const int color = getColorAt(sq);
+                    std::cout << pieceChar(type, color) << ' ';
+                }
+            }
+            std::cout << '\n';
+        }
+        std::cout << "  a b c d e f g h\n";
+
+        std::cout << "Side to move: " << (side == COLOR_WHITE ? "White" : "Black") << '\n';
+        std::cout << "Castling rights: ";
+        if (castleRights == 0) {
+            std::cout << '-';
+        } else {
+            if (castleRights & 0x01) std::cout << 'K';
+            if (castleRights & 0x02) std::cout << 'Q';
+            if (castleRights & 0x04) std::cout << 'k';
+            if (castleRights & 0x08) std::cout << 'q';
+        }
+        std::cout << '\n';
+        std::cout << "En passant: "
+                  << (enPas >= 0 ? BoardRepresentation::SquareNameFromIndex(enPas) : "-")
+                  << '\n';
+        std::cout << "Halfmove clock: " << fiftyMove << '\n';
+        std::cout << "History ply: " << hisPly << '\n';
+        std::cout << "FEN: " << getFEN() << '\n';
+    }
+
+    void BoardState::printMoveHistory() {
+        std::cout << "\n=== Move History (" << moveHistory.size() << " moves) ===\n";
+        if (moveHistory.empty()) {
+            std::cout << "<empty>\n";
+            return;
+        }
+
+        for (std::size_t i = 0; i < moveHistory.size(); ++i) {
+            const Move& m = moveHistory[i].move;
+            std::cout << (i + 1) << ". " << m.toString();
+            if (m.isPromotion()) {
+                std::cout << " (promotion)";
+            }
+            if (moveHistory[i].capturedPieceType != -1) {
+                std::cout << " (capture)";
+            }
+            std::cout << '\n';
+        }
     }
 }  // namespace Chess

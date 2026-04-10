@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -25,7 +26,6 @@ HARNESS_CPP = r'''
 #include "chess_engine/fen_util.h"
 #include "chess_engine/board_rep.h"
 #include "thread_pool.h"
-#include "logger.h"
 
 using namespace Chess;
 
@@ -199,9 +199,6 @@ int main(int argc, char** argv) {
     MoveGenerator gen;
     gen.init();
 
-    // Ensure project-wide logger does not redirect std::cout/cerr for the probe
-    Logger::setSilent(true);
-
     if (mode == "moves") {
         gen.generateLegalMoves(board, true);
         std::vector<std::string> moves;
@@ -275,6 +272,13 @@ def build_probe() -> Path:
 
     cpp_file.write_text(HARNESS_CPP, encoding="utf-8")
 
+    spdlog_include_candidates = [
+        (ROOT / 'build' / 'x64-debug' / 'vcpkg_installed' / 'x64-windows' / 'include').as_posix(),
+        (ROOT / 'build' / 'x64-release' / 'vcpkg_installed' / 'x64-windows' / 'include').as_posix(),
+        (ROOT / 'build' / 'x86-debug' / 'vcpkg_installed' / 'x86-windows' / 'include').as_posix(),
+        (ROOT / 'build' / 'x86-release' / 'vcpkg_installed' / 'x86-windows' / 'include').as_posix(),
+    ]
+
     # Write a minimal CMakeLists.txt that builds the probe executable and uses the repo include dirs
     cmakelists = f'''cmake_minimum_required(VERSION 3.8)
 project(engine_probe_tmp LANGUAGES CXX)
@@ -284,7 +288,6 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
 file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS
     "{(ROOT / 'src' / 'chess_engine').as_posix()}/*.cpp"
-    "{(ROOT / 'utils/logger.cpp').as_posix()}"
 )
 
 # Exclude any internal test/main files to avoid duplicate `main` symbols when linking.
@@ -295,10 +298,20 @@ add_executable(engine_probe_tmp
     ${{PROJECT_SOURCES}}
 )
 
+target_compile_definitions(engine_probe_tmp PRIVATE CHESS2D_NO_LOGGING)
+
+if (MSVC)
+    target_compile_options(engine_probe_tmp PRIVATE /utf-8)
+endif()
+
 target_include_directories(engine_probe_tmp PRIVATE
     "{(ROOT / 'include').as_posix()}"
     "{(ROOT / 'include/chess_engine').as_posix()}"
     "{(ROOT / 'utils/include').as_posix()}"
+    "{spdlog_include_candidates[0]}"
+    "{spdlog_include_candidates[1]}"
+    "{spdlog_include_candidates[2]}"
+    "{spdlog_include_candidates[3]}"
 )
 
 # Enable link-time optimization (LTO) / IPO when supported for the probe
@@ -308,6 +321,11 @@ set_property(TARGET engine_probe_tmp PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
     # Configure with CMake
     cmake_cmd = [shutil.which('cmake') or 'cmake', '-S', temp_dir.as_posix(), '-B', build_dir.as_posix(), '-DCMAKE_BUILD_TYPE=Release']
+
+    vcpkg_root = Path((os.environ.get('VCPKG_ROOT') or '')).expanduser()
+    if vcpkg_root and vcpkg_root.exists():
+        cmake_cmd.append(f'-DCMAKE_TOOLCHAIN_FILE={((vcpkg_root / "scripts" / "buildsystems" / "vcpkg.cmake").as_posix())}')
+        cmake_cmd.append('-DVCPKG_TARGET_TRIPLET=x64-windows')
     # Prefer Ninja generator if available
     if shutil.which('ninja'):
         cmake_cmd.extend(['-G', 'Ninja'])

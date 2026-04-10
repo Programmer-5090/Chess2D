@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Optional
 
 from engine_probe import engine_perft_split, engine_perft
 
@@ -100,7 +101,74 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--show-all", action="store_true", help="Print all moves even if they match")
     parser.add_argument("--timeout", type=float, default=180.0, help="Engine timeout in seconds (default: 180)")
+    parser.add_argument(
+        "--trace-first-mismatch",
+        action="store_true",
+        help="Recursively trace and print the first mismatching move line",
+    )
+    parser.add_argument(
+        "--trace-max-depth",
+        type=int,
+        default=16,
+        help="Maximum recursive trace depth (default: 16)",
+    )
     return parser.parse_args()
+
+
+def _find_first_mismatch(sf_split: dict[str, int], engine_split: dict[str, int]) -> Optional[tuple[str, int | None, int | None]]:
+    all_moves = sorted(set(sf_split.keys()) | set(engine_split.keys()))
+    for mv in all_moves:
+        s = sf_split.get(mv)
+        e = engine_split.get(mv)
+        if s != e:
+            return (mv, e, s)
+    return None
+
+
+def _apply_uci_moves_to_fen(sf: "StockfishSession", fen: str, moves: list[str]) -> str:
+    if not moves:
+        return fen
+    sf._send(f"position fen {fen} moves {' '.join(moves)}")
+    sf._send("d")
+    lines = sf._read_until(lambda line: line.strip().startswith("Fen:"), timeout_sec=30.0)
+    out_fen = ""
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith("Fen:"):
+            out_fen = line[len("Fen:"):].strip()
+    sf._isready()
+    if not out_fen:
+        raise RuntimeError("Failed to extract FEN from Stockfish 'd' output")
+    return out_fen
+
+
+def trace_first_mismatch(sf: "StockfishSession", start_fen: str, depth: int, timeout: float, max_depth: int) -> None:
+    print("\n=== Trace First Mismatch ===")
+    path: list[str] = []
+    fen = start_fen
+    remaining = depth
+
+    while remaining > 0 and len(path) < max_depth:
+        sf_split = sf.perft_split(fen, remaining)
+        engine_split = engine_perft_split(fen, remaining, timeout_sec=timeout)
+        engine_split.pop("total", None)
+
+        first = _find_first_mismatch(sf_split, engine_split)
+        if first is None:
+            print("No mismatch at this node; trace converged.")
+            return
+
+        mv, e, s = first
+        print(f"ply {len(path) + 1} depth {remaining}: {mv} engine={e} stockfish={s}")
+        path.append(mv)
+
+        if remaining == 1:
+            break
+
+        fen = _apply_uci_moves_to_fen(sf, start_fen, path)
+        remaining -= 1
+
+    print("Trace path:", " ".join(path) if path else "<empty>")
 
 
 def main() -> int:
@@ -118,6 +186,15 @@ def main() -> int:
     sf = StockfishSession(sf_bin)
     try:
         sf_split = sf.perft_split(args.fen, args.depth)
+
+        if args.trace_first_mismatch:
+            trace_first_mismatch(
+                sf,
+                args.fen,
+                args.depth,
+                args.timeout,
+                max(1, args.trace_max_depth),
+            )
     finally:
         sf.close()
 

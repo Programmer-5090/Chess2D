@@ -16,7 +16,6 @@
 #include "board_rep.h"
 
 namespace Chess {
-
     class Move {
     public:
         // Move flag constants
@@ -135,7 +134,5 @@ namespace Chess {
             return a.moveValue == b.moveValue;
         }
     };
-
 }  // namespace Chess
-
 #endif  // MOVE_H

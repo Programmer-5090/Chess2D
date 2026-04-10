@@ -1,14 +1,7 @@
-﻿find_package(SDL3 REQUIRED CONFIG)
+find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(SDL3_ttf REQUIRED CONFIG)
-
-# Download clay header-only library
-include(FetchContent)
-FetchContent_Declare(clay
-    GIT_REPOSITORY https://github.com/nicbarker/clay.git
-    GIT_TAG main
-)
-FetchContent_MakeAvailable(clay)
+find_package(spdlog REQUIRED CONFIG)
 
 # Collect all source files automatically
 file(GLOB_RECURSE CHESS2D_SOURCES CONFIGURE_DEPENDS
@@ -32,14 +25,19 @@ target_include_directories(Chess2D PRIVATE
     "${CMAKE_SOURCE_DIR}/include/search"
     "${CMAKE_SOURCE_DIR}/utils/include"
     "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
-    "${clay_SOURCE_DIR}"
 )
 
 target_link_libraries(Chess2D PRIVATE
     SDL3::SDL3
     SDL3_image::SDL3_image
     SDL3_ttf::SDL3_ttf
+    spdlog::spdlog
 )
+
+if (CHESS2D_ENABLE_TRACY)
+    target_link_libraries(Chess2D PRIVATE Tracy::TracyClient)
+    target_compile_definitions(Chess2D PRIVATE TRACY_ENABLE)
+endif()
 
 # Copy resources folder next to the executable after every build
 add_custom_command(TARGET Chess2D POST_BUILD

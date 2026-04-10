@@ -17,7 +17,6 @@
 #include <string>
 
 namespace Chess {
-
     /*
      * Bit indices for the mailbox representation
      * Used for quick piece lookup without iterating through bitboards
@@ -48,6 +47,11 @@ namespace Chess {
         uint64_t blackPieces = 0;     // All black pieces
         uint64_t mainBoard = 0;       // All pieces (white | black)
 
+        // Attack tables - pre-computed during move generation
+        // Bitboards showing all squares each side can attack
+        uint64_t whiteAttackTable = 0; // All squares white can attack
+        uint64_t blackAttackTable = 0; // All squares black can attack
+
         // Mailbox representation for O(1) piece lookup by square
         // Maps mailbox index (0-119) to piece type, or -1 if empty
         std::array<int, BRD_SQ_NUM> mailbox{};
@@ -70,6 +74,7 @@ namespace Chess {
             int previousEnPas = -1;
             int previousFiftyMove = 0;
             int previousCastleRights = 0;
+            uint64_t previousPosKey = 0ULL;
         };
         std::vector<MoveHistoryEntry> moveHistory;
 
@@ -241,6 +246,12 @@ namespace Chess {
         uint64_t getMainBoard() const { return mainBoard; }
         uint64_t getOccupancy(int color) const { return (color == COLOR_WHITE) ? whitePieces : blackPieces; }
 
+        uint64_t getAttackTable(int color) const { return (color == COLOR_WHITE) ? whiteAttackTable : blackAttackTable; }
+        void setAttackTable(int color, uint64_t table) {
+            if (color == COLOR_WHITE) whiteAttackTable = table;
+            else blackAttackTable = table;
+        }
+
         std::string getFEN() const;
         void loadFEN(const std::string& fen);
 
@@ -263,6 +274,10 @@ namespace Chess {
         void setPosKey(uint64_t pk) { posKey = pk; }
 
         Move getLastMove() const { return moveHistory.empty() ? Move::invalid() : moveHistory.back().move; }
+
+        bool isRepetition() const;
+        bool isDrawByFiftyMove() const { return fiftyMove >= 100; }
+        bool isInsufficientMaterial() const;
 
         bool isWhiteToMove() const { return side == COLOR_WHITE; }
         bool isBlackToMove() const { return side == COLOR_BLACK; }
@@ -288,8 +303,9 @@ namespace Chess {
          * Useful when starting a new game
          */
         void clearHistory() { moveHistory.clear(); }
+
+        void printMoveHistory();
+        void printBoardState();
     };
-
 }  // namespace Chess
-
 #endif  // BOARD_STATE_H

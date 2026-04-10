@@ -1,12 +1,16 @@
 #include "move_generator.h"
+#include "profiler.h"
+#include "magics.h"
+#include "bitboard_util.h"
 
 namespace Chess {
 
     void MoveGenerator::init() {
         PrecomputedMoveData::initialize();
+        initialize_magics();
     }
 
-    void MoveGenerator::generateLegalMoves(const BoardState& board, bool genQuiet=true) {
+    void MoveGenerator::generateLegalMoves(BoardState& board, bool genQuiet=true) {
         this->board = &board;
         genQuiets = genQuiet;
 
@@ -20,7 +24,14 @@ namespace Chess {
         if (friendlyKingList.count() == 0) return;
         friendlyKingSquare = friendlyKingList[0];
 
+        friendlyOccupancy = board.getOccupancy(friendlyColour);
+        opponentOccupancy = board.getOccupancy(opponentColour);
+        allOccupancy = board.getMainBoard();
+
         calculateOpponentAttackData();
+        
+        board.setAttackTable(opponentColour, opponentAttackMap);
+        
         clearMoves();
         generateLegalMovesConstrained(board, genQuiet);
 
@@ -36,9 +47,7 @@ namespace Chess {
         genQuiets = genQuiet;
         generateKingMoves();
 
-        if (inDoubleCheck) {
-            return;
-        }
+        if (inDoubleCheck) return;
 
         generateSlidingMoves();
         generateKnightMoves();
@@ -82,19 +91,20 @@ namespace Chess {
         if (friendlyKingList.count() == 0) return pieceMoves;
         friendlyKingSquare = friendlyKingList[0];
 
+        friendlyOccupancy = board->getOccupancy(friendlyColour);
+        opponentOccupancy = board->getOccupancy(opponentColour);
+        allOccupancy = board->getMainBoard();
+
         // calculate attack/check/pin data
         calculateOpponentAttackData();
 
-        const uint64_t friendlyOccupancy = board->getOccupancy(friendlyColour);
-        const uint64_t opponentOccupancy = board->getOccupancy(opponentColour);
-        const uint64_t allOccupancy = board->getMainBoard();
-
         const bool isPinned = isPinnedFunc(square);
+        const uint64_t pinLine = isPinned ? pinLineBitmaskBySquare[square] : 0ULL;
 
         switch (pieceType) {
         case PIECE_KING: {
             const int kingSquare = square;
-            const auto kingMoveList = PrecomputedMoveData::getKingMovesVector(kingSquare);
+            const auto& kingMoveList = PrecomputedMoveData::getKingMovesVector(kingSquare);
             for (uint8_t toSquare : kingMoveList) {
                 uint64_t toMask = (1ULL << toSquare);
                 if ((toSquare == kingSquare + 2) || (toSquare == kingSquare - 2)) {
@@ -140,34 +150,38 @@ namespace Chess {
         case PIECE_ROOK:
         case PIECE_BISHOP:
         case PIECE_QUEEN: {
-            int startDir = 0, endDir = 8;
-            if (pieceType == PIECE_ROOK) { startDir = 0; endDir = 4; }
-            else if (pieceType == PIECE_BISHOP) { startDir = 4; endDir = 8; }
-            else { startDir = 0; endDir = 8; }
+            uint64_t attacks = 0ULL;
+            if (pieceType == PIECE_ROOK) {
+                const MagicEntry& m = rookMagics[square];
+                const uint64_t blockers = allOccupancy | ~m.mask;
+                const uint64_t index = (blockers * m.magic) >> m.shift;
+                attacks = m.ptr[index] & ~friendlyOccupancy;
+            } else if (pieceType == PIECE_BISHOP) {
+                const MagicEntry& m = bishopMagics[square];
+                const uint64_t blockers = allOccupancy | ~m.mask;
+                const uint64_t index = (blockers * m.magic) >> m.shift;
+                attacks = m.ptr[index] & ~friendlyOccupancy;
+            } else {
+                const MagicEntry& rookMagic = rookMagics[square];
+                const MagicEntry& bishopMagic = bishopMagics[square];
+                const uint64_t rookBlockers = allOccupancy | ~rookMagic.mask;
+                const uint64_t bishopBlockers = allOccupancy | ~bishopMagic.mask;
+                const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+                const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+                attacks = (rookMagic.ptr[rookIndex] | bishopMagic.ptr[bishopIndex]) & ~friendlyOccupancy;
+            }
 
-            for (int dir = startDir; dir < endDir; ++dir) {
-                int offset = PrecomputedMoveData::dirOffsets[dir];
-                if (isPinned && !isMovingAlongRay(offset, friendlyKingSquare, square)) continue;
-
-                int s = square + offset;
-                while (s >= 0 && s < 64) {
-                    if (!PrecomputedMoveData::isDirectionalMove(square, s, dir)) break;
-                    uint64_t mask = (1ULL << s);
-                    if (friendlyOccupancy & mask) break;
-                    const bool isCapture = (opponentOccupancy & mask) != 0;
-                    const bool movePreventsCheck = squareIsInCheckRay(s);
-                    if (!inCheck || movePreventsCheck) {
-                        if (isCapture) pieceMoves.emplace_back(square, s); else pieceMoves.emplace_back(square, s);
-                    }
-                    if (isCapture || movePreventsCheck) break;
-                    s += offset;
-                }
+            while (attacks) {
+                const int toSquare = popLSB(attacks);
+                if (isPinned && (pinLine & (1ULL << toSquare)) == 0ULL) continue;
+                if (inCheck && !squareIsInCheckRay(toSquare)) continue;
+                pieceMoves.emplace_back(square, toSquare);
             }
             break;
         }
         case PIECE_KNIGHT: {
             if (isPinned) break; // knight pinned can't move
-            const auto knightMoveList = PrecomputedMoveData::getKnightMoves(square);
+            const auto& knightMoveList = PrecomputedMoveData::getKnightMoves(square);
             for (uint8_t toSquare : knightMoveList) {
                 uint64_t toMask = (1ULL << toSquare);
                 if (friendlyOccupancy & toMask) continue;
@@ -190,7 +204,7 @@ namespace Chess {
             if (pushSquare >= 0 && pushSquare < 64) {
                 uint64_t pushMask = (1ULL << pushSquare);
                 if (!(allOccupancy & pushMask)) {
-                    if (!isPinned || isMovingAlongRay(pushDir, pawnSquare, friendlyKingSquare)) {
+                    if (!isPinned || (pinLine & pushMask)) {
                         if (!inCheck || squareIsInCheckRay(pushSquare)) {
                             if (oneStepFromPromotion) {
                                 pieceMoves.emplace_back(pawnSquare, pushSquare, Move::Flag::PromoteToQueen);
@@ -223,8 +237,7 @@ namespace Chess {
                 PrecomputedMoveData::getPawnAttacksBlack(pawnSquare);
 
             for (int captureSquare : pawnAttacks) {
-                const int captureOffset = captureSquare - pawnSquare;
-                if (isPinned && !isMovingAlongRay(captureOffset, friendlyKingSquare, pawnSquare)) continue;
+                if (isPinned && (pinLine & (1ULL << captureSquare)) == 0ULL) continue;
                 uint64_t captureMask = (1ULL << captureSquare);
                 if (opponentOccupancy & captureMask) {
                     if (inCheck && !squareIsInCheckRay(captureSquare)) continue;
@@ -251,7 +264,6 @@ namespace Chess {
         default:
             break;
         }
-
         return pieceMoves;
     }
 
@@ -267,9 +279,12 @@ namespace Chess {
         pinsExistInPosition = false;
         checkRayBitmask = 0ULL;
         pinRayBitmask = 0ULL;
+        pinLineBitmaskBySquare.fill(0ULL);
+
+        const auto& pieceBoards = board->getPieceBoards();
+        const uint64_t opponentPawnsBb = pieceBoards[opponentColour][PIECE_PAWN];
 
         const PieceList& opponentKnights = board->getPieceList(opponentColour, PIECE_KNIGHT);
-        const PieceList& opponentPawns = board->getPieceList(opponentColour, PIECE_PAWN);
 
         for (int i = 0; i < opponentKnights.count(); ++i) {
             const int knightSq = opponentKnights[i];
@@ -282,19 +297,21 @@ namespace Chess {
             }
         }
 
-        for (int i = 0; i < opponentPawns.count(); ++i) {
-            const int pawnSquare = opponentPawns[i];
-            uint64_t pawnAttackBitboard = PrecomputedMoveData::getPawnAttackBitboard(opponentColour, pawnSquare);
-            opponentPawnAttackMap |= pawnAttackBitboard;
-            if (pawnAttackBitboard & (1ULL << friendlyKingSquare)) {
-                inDoubleCheck = inCheck;
-                inCheck = true;
-                checkRayBitmask |= (1ULL << pawnSquare);
-            }
+        if (opponentColour == COLOR_WHITE) {
+            opponentPawnAttackMap = ((opponentPawnsBb & ~FILE_A) << 7) | ((opponentPawnsBb & ~FILE_H) << 9);
+        } else {
+            opponentPawnAttackMap = ((opponentPawnsBb & ~FILE_H) >> 7) | ((opponentPawnsBb & ~FILE_A) >> 9);
+        }
+
+        const uint64_t checkingPawns =
+            PrecomputedMoveData::getPawnAttackBitboard(opponentColour ^ 1, friendlyKingSquare) & opponentPawnsBb;
+        if (checkingPawns) {
+            inDoubleCheck = inCheck;
+            inCheck = true;
+            checkRayBitmask |= checkingPawns;
         }
 
         genSlidingAttackMap();
-        detectSlidingChecksAndPins();
 
         opponentAttackMapNoPawns = opponentKnightAttacks | opponentSlidingAttackMap;
         opponentAttackMap = opponentAttackMapNoPawns | opponentPawnAttackMap;
@@ -313,130 +330,96 @@ namespace Chess {
         const PieceList& opponentBishops = board->getPieceList(opponentColour, PIECE_BISHOP);
         const PieceList& opponentQueens = board->getPieceList(opponentColour, PIECE_QUEEN);
 
+        auto processCheckPin = [&](int attackerSquare, bool diagonalOnly) {
+            const int dir = PrecomputedMoveData::getDirectionOffset(friendlyKingSquare, attackerSquare);
+            if (dir == 0) return;
+
+            const bool isDiagonalDir = (dir == 7 || dir == -7 || dir == 9 || dir == -9);
+            if (diagonalOnly != isDiagonalDir) return;
+
+            const uint64_t between = PrecomputedMoveData::getBetweenBitboard(friendlyKingSquare, attackerSquare);
+            const uint64_t blockers = between & allOccupancy;
+            if (blockers == 0ULL) {
+                inDoubleCheck = inCheck;
+                inCheck = true;
+                checkRayBitmask |= between | (1ULL << attackerSquare);
+                return;
+            }
+
+            if ((blockers & ~friendlyOccupancy) == 0ULL && popCount(blockers) == 1) {
+                pinsExistInPosition = true;
+                const int pinnedSq = getLSB(blockers);
+                pinRayBitmask |= (1ULL << pinnedSq);
+                pinLineBitmaskBySquare[pinnedSq] = PrecomputedMoveData::getLineBitboard(friendlyKingSquare, attackerSquare);
+            }
+        };
+
         for (int i = 0; i < opponentRooks.count(); ++i) {
             updateSlidingAttackPiece(opponentRooks[i], 0, 4);
+            processCheckPin(opponentRooks[i], false);
         }
         for (int i = 0; i < opponentQueens.count(); ++i) {
             updateSlidingAttackPiece(opponentQueens[i], 0, 8);
+            const int qsq = opponentQueens[i];
+            const int dir = PrecomputedMoveData::getDirectionOffset(friendlyKingSquare, qsq);
+            if (dir != 0) {
+                const bool diagonal = (dir == 7 || dir == -7 || dir == 9 || dir == -9);
+                processCheckPin(qsq, diagonal);
+            }
         }
         for (int i = 0; i < opponentBishops.count(); ++i) {
             updateSlidingAttackPiece(opponentBishops[i], 4, 8);
-        }
-    }
-
-    void MoveGenerator::detectSlidingChecksAndPins() {
-        for (int dir = 0; dir < 8; ++dir) {
-            const bool isDiagonal = dir > 3;
-            const int offset = PrecomputedMoveData::dirOffsets[dir];
-            int square = friendlyKingSquare + offset;
-            bool seenFriendlyBlocker = false;
-            int blockerSquare = -1;
-            uint64_t rayMask = 0ULL;
-
-            while (square >= 0 && square < 64) {
-                if (!PrecomputedMoveData::isDirectionalMove(friendlyKingSquare, square, dir)) {
-                    break;
-                }
-
-                rayMask |= (1ULL << square);
-                const int pieceType = board->getPieceTypeAt(square);
-                if (pieceType == -1) {
-                    square += offset;
-                    continue;
-                }
-
-                const int color = board->getColorAt(square);
-                if (color == friendlyColour) {
-                    if (!seenFriendlyBlocker) {
-                        seenFriendlyBlocker = true;
-                        blockerSquare = square;
-                    } else {
-                        break;
-                    }
-                } else {
-                    const bool sliderMatches = isDiagonal ?
-                        (pieceType == PIECE_BISHOP || pieceType == PIECE_QUEEN) :
-                        (pieceType == PIECE_ROOK || pieceType == PIECE_QUEEN);
-
-                    if (sliderMatches) {
-                        if (seenFriendlyBlocker) {
-                            pinsExistInPosition = true;
-                            if (blockerSquare >= 0) {
-                                pinRayBitmask |= (1ULL << blockerSquare);
-                            }
-                        } else {
-                            inDoubleCheck = inCheck;
-                            inCheck = true;
-                            checkRayBitmask |= rayMask;
-                        }
-                    }
-                    break;
-                }
-
-                square += offset;
-            }
-
-            if (inDoubleCheck) {
-                break;
-            }
+            processCheckPin(opponentBishops[i], true);
         }
     }
 
     void MoveGenerator::updateSlidingAttackPiece(int startSquare, int startDirIndex, int endDirIndex) {
-        const uint64_t allOccupancy = board->getMainBoard();
+        uint64_t attacks = 0ULL;
+        const uint64_t occupancyNoFriendlyKing = board->getMainBoard() & ~(1ULL << friendlyKingSquare);
 
-        for (int dir = startDirIndex; dir < endDirIndex; ++dir) {
-            int offset = PrecomputedMoveData::dirOffsets[dir];
-            int square = startSquare + offset;
-
-            while (square >= 0 && square < 64) {
-                if (!PrecomputedMoveData::isDirectionalMove(startSquare, square, dir)) {
-                    break;
-                }
-
-                opponentSlidingAttackMap |= (1ULL << square);
-
-                const uint64_t sqMask = (1ULL << square);
-                if (square != friendlyKingSquare && (allOccupancy & sqMask)) {
-                    break;
-                }
-
-                square += offset;
-            }
+        if (startDirIndex == 0 && endDirIndex == 4) {
+            const MagicEntry& rookMagic = rookMagics[startSquare];
+            const uint64_t blockers = occupancyNoFriendlyKing | ~rookMagic.mask;
+            const uint64_t index = (blockers * rookMagic.magic) >> rookMagic.shift;
+            attacks = rookMagic.ptr[index];
+        } else if (startDirIndex == 4 && endDirIndex == 8) {
+            const MagicEntry& bishopMagic = bishopMagics[startSquare];
+            const uint64_t blockers = occupancyNoFriendlyKing | ~bishopMagic.mask;
+            const uint64_t index = (blockers * bishopMagic.magic) >> bishopMagic.shift;
+            attacks = bishopMagic.ptr[index];
+        } else {
+            const MagicEntry& rookMagic = rookMagics[startSquare];
+            const MagicEntry& bishopMagic = bishopMagics[startSquare];
+            const uint64_t rookBlockers = occupancyNoFriendlyKing | ~rookMagic.mask;
+            const uint64_t bishopBlockers = occupancyNoFriendlyKing | ~bishopMagic.mask;
+            const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+            const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+            attacks = rookMagic.ptr[rookIndex] | bishopMagic.ptr[bishopIndex];
         }
+
+        opponentSlidingAttackMap |= attacks;
     }
 
     void MoveGenerator::generateKingMoves() {
-        uint64_t friendlyOccupancy = board->getOccupancy(friendlyColour);
-        uint64_t opponentOccupancy = board->getOccupancy(opponentColour);
-        uint64_t allOccupancy = board->getMainBoard();
-
         const auto& kingSquares = board->getPieceList(friendlyColour, PIECE_KING);
         if (kingSquares.count() == 0) return;
 
         const int kingSquare = kingSquares[0];
-        const auto kingMoveList = PrecomputedMoveData::getKingMovesVector(kingSquare);
+        const auto& kingMoveList = PrecomputedMoveData::getKingMovesVector(kingSquare);
 
         for (uint8_t toSquare : kingMoveList) {
             uint64_t toMask = (1ULL << toSquare);
 
-            if ((toSquare == kingSquare + 2) || (toSquare == kingSquare - 2)) {
-                continue;
-            }
+            if ((toSquare == kingSquare + 2) || (toSquare == kingSquare - 2)) continue;
 
             if (friendlyOccupancy & toMask) continue;
 
             const bool isCapture = (opponentOccupancy & toMask) != 0;
-            if (!isCapture && !genQuiets) {
-                continue;
-            }
+            if (!isCapture && !genQuiets) continue;
 
             if (!squareIsAttacked(toSquare)) {
-                if (isCapture) {
-                    addCaptureMove(*board, kingSquare, toSquare);
-                } else {
-                    addQuietMove(*board, kingSquare, toSquare);
-                }
+                if (isCapture) addCaptureMove(*board, kingSquare, toSquare);
+                else addQuietMove(*board, kingSquare, toSquare);
             }
         }
 
@@ -469,132 +452,270 @@ namespace Chess {
     }
 
     void MoveGenerator::generateSlidingMoves() {
-        generateSlidingDirections(0, 4);
-        generateSlidingDirections(4, 8);
-        generateSlidingDirections(0, 8);
+        generateRookMoves();
+        generateBishopMoves();
+        generateQueenMoves();
     }
 
-    void MoveGenerator::generateSlidingDirections(int startDirIndex, int endDirIndex) {
-        int pieceType = -1;
-        if (startDirIndex == 0 && endDirIndex == 4) {
-            pieceType = PIECE_ROOK;
-        } else if (startDirIndex == 4 && endDirIndex == 8) {
-            pieceType = PIECE_BISHOP;
-        } else if (startDirIndex == 0 && endDirIndex == 8) {
-            pieceType = PIECE_QUEEN;
-        }
+    void MoveGenerator::generateRookMoves() {
+        const auto& rookSquares = board->getPieceList(friendlyColour, PIECE_ROOK);
+        const bool unconstrained = !inCheck && !pinsExistInPosition;
 
-        if (pieceType < 0) return;
+        if (unconstrained) {
+            for (int i = 0; i < rookSquares.count(); ++i) {
+                const int fromSquare = rookSquares[i];
+                const MagicEntry& m = rookMagics[fromSquare];
+                const uint64_t blockers = allOccupancy | ~m.mask;
+                const uint64_t index = (blockers * m.magic) >> m.shift;
+                uint64_t attacks = m.ptr[index] & ~friendlyOccupancy;
 
-        const auto& pieceSquares = board->getPieceList(friendlyColour, pieceType);
-        for (int i = 0; i < pieceSquares.count(); ++i) {
-            generateSlidingPieceMoves(pieceSquares[i], startDirIndex, endDirIndex);
-        }
-    }
-
-    void MoveGenerator::generateSlidingPieceMoves(int startSquare, int startDirIndex, int endDirIndex) {
-        uint64_t friendlyOccupancy = board->getOccupancy(friendlyColour);
-        uint64_t opponentOccupancy = board->getOccupancy(opponentColour);
-
-        const bool isPinned = isPinnedFunc(startSquare);
-        if (inCheck && isPinned) {
+                while (attacks) {
+                    const int toSquare = popLSB(attacks);
+                    const uint64_t toMask = (1ULL << toSquare);
+                    if (opponentOccupancy & toMask) addCaptureMove(*board, fromSquare, toSquare);
+                    else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
+                }
+            }
             return;
         }
 
-        for (int dir = startDirIndex; dir < endDirIndex; ++dir) {
-            int offset = PrecomputedMoveData::dirOffsets[dir];
+        for (int i = 0; i < rookSquares.count(); ++i) {
+            const int fromSquare = rookSquares[i];
+            const bool isPinned = isPinnedFunc(fromSquare);
+            const uint64_t pinLine = isPinned ? pinLineBitmaskBySquare[fromSquare] : 0ULL;
+            if (inCheck && isPinned) continue;
 
-            if (isPinned && !isMovingAlongRay(offset, friendlyKingSquare, startSquare)) {
-                continue;
+            const MagicEntry& m = rookMagics[fromSquare];
+            const uint64_t blockers = allOccupancy | ~m.mask;
+            const uint64_t index = (blockers * m.magic) >> m.shift;
+            uint64_t attacks = m.ptr[index] & ~friendlyOccupancy;
+
+            while (attacks) {
+                const int toSquare = popLSB(attacks);
+                if (isPinned && (pinLine & (1ULL << toSquare)) == 0ULL) continue;
+                if (inCheck && !squareIsInCheckRay(toSquare)) continue;
+
+                const uint64_t toMask = (1ULL << toSquare);
+                const bool isCapture = (opponentOccupancy & toMask) != 0;
+                if (isCapture) addCaptureMove(*board, fromSquare, toSquare);
+                else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
             }
+        }
+    }
 
-            int square = startSquare + offset;
-            while (square >= 0 && square < 64) {
-                if (!PrecomputedMoveData::isDirectionalMove(startSquare, square, dir)) {
-                    break;
+    void MoveGenerator::generateBishopMoves() {
+        const auto& bishopSquares = board->getPieceList(friendlyColour, PIECE_BISHOP);
+        const bool unconstrained = !inCheck && !pinsExistInPosition;
+
+        if (unconstrained) {
+            for (int i = 0; i < bishopSquares.count(); ++i) {
+                const int fromSquare = bishopSquares[i];
+                const MagicEntry& m = bishopMagics[fromSquare];
+                const uint64_t blockers = allOccupancy | ~m.mask;
+                const uint64_t index = (blockers * m.magic) >> m.shift;
+                uint64_t attacks = m.ptr[index] & ~friendlyOccupancy;
+
+                while (attacks) {
+                    const int toSquare = popLSB(attacks);
+                    const uint64_t toMask = (1ULL << toSquare);
+                    if (opponentOccupancy & toMask) addCaptureMove(*board, fromSquare, toSquare);
+                    else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
                 }
+            }
+            return;
+        }
 
-                uint64_t squareMask = (1ULL << square);
+        for (int i = 0; i < bishopSquares.count(); ++i) {
+            const int fromSquare = bishopSquares[i];
+            const bool isPinned = isPinnedFunc(fromSquare);
+            const uint64_t pinLine = isPinned ? pinLineBitmaskBySquare[fromSquare] : 0ULL;
+            if (inCheck && isPinned) continue;
 
-                if (friendlyOccupancy & squareMask) break;
+            const MagicEntry& m = bishopMagics[fromSquare];
+            const uint64_t blockers = allOccupancy | ~m.mask;
+            const uint64_t index = (blockers * m.magic) >> m.shift;
+            uint64_t attacks = m.ptr[index] & ~friendlyOccupancy;
 
-                const bool isCapture = (opponentOccupancy & squareMask) != 0;
-                const bool movePreventsCheck = squareIsInCheckRay(square);
+            while (attacks) {
+                const int toSquare = popLSB(attacks);
+                if (isPinned && (pinLine & (1ULL << toSquare)) == 0ULL) continue;
+                if (inCheck && !squareIsInCheckRay(toSquare)) continue;
 
-                if (!inCheck || movePreventsCheck) {
-                    if (isCapture) {
-                        addCaptureMove(*board, startSquare, square);
-                    } else if (genQuiets) {
-                        addQuietMove(*board, startSquare, square);
-                    }
+                const uint64_t toMask = (1ULL << toSquare);
+                const bool isCapture = (opponentOccupancy & toMask) != 0;
+                if (isCapture) addCaptureMove(*board, fromSquare, toSquare);
+                else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
+            }
+        }
+    }
+
+    void MoveGenerator::generateQueenMoves() {
+        const auto& queenSquares = board->getPieceList(friendlyColour, PIECE_QUEEN);
+        const bool unconstrained = !inCheck && !pinsExistInPosition;
+
+        if (unconstrained) {
+            for (int i = 0; i < queenSquares.count(); ++i) {
+                const int fromSquare = queenSquares[i];
+                const MagicEntry& rookMagic = rookMagics[fromSquare];
+                const MagicEntry& bishopMagic = bishopMagics[fromSquare];
+                const uint64_t rookBlockers = allOccupancy | ~rookMagic.mask;
+                const uint64_t bishopBlockers = allOccupancy | ~bishopMagic.mask;
+                const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+                const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+                uint64_t attacks = (rookMagic.ptr[rookIndex] | bishopMagic.ptr[bishopIndex]) & ~friendlyOccupancy;
+
+                while (attacks) {
+                    const int toSquare = popLSB(attacks);
+                    const uint64_t toMask = (1ULL << toSquare);
+                    if (opponentOccupancy & toMask) addCaptureMove(*board, fromSquare, toSquare);
+                    else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
                 }
+            }
+            return;
+        }
 
-                if (isCapture || movePreventsCheck) {
-                    break;
-                }
+        for (int i = 0; i < queenSquares.count(); ++i) {
+            const int fromSquare = queenSquares[i];
+            const bool isPinned = isPinnedFunc(fromSquare);
+            const uint64_t pinLine = isPinned ? pinLineBitmaskBySquare[fromSquare] : 0ULL;
+            if (inCheck && isPinned) continue;
 
-                square += offset;
+            const MagicEntry& rookMagic = rookMagics[fromSquare];
+            const MagicEntry& bishopMagic = bishopMagics[fromSquare];
+            const uint64_t rookBlockers = allOccupancy | ~rookMagic.mask;
+            const uint64_t bishopBlockers = allOccupancy | ~bishopMagic.mask;
+            const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+            const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+            uint64_t attacks = (rookMagic.ptr[rookIndex] | bishopMagic.ptr[bishopIndex]) & ~friendlyOccupancy;
+
+            while (attacks) {
+                const int toSquare = popLSB(attacks);
+                if (isPinned && (pinLine & (1ULL << toSquare)) == 0ULL) continue;
+                if (inCheck && !squareIsInCheckRay(toSquare)) continue;
+
+                const uint64_t toMask = (1ULL << toSquare);
+                const bool isCapture = (opponentOccupancy & toMask) != 0;
+                if (isCapture) addCaptureMove(*board, fromSquare, toSquare);
+                else if (genQuiets) addQuietMove(*board, fromSquare, toSquare);
             }
         }
     }
 
     void MoveGenerator::generateKnightMoves() {
-        uint64_t friendlyOccupancy = board->getOccupancy(friendlyColour);
-        uint64_t opponentOccupancy = board->getOccupancy(opponentColour);
-
         const auto& knightSquares = board->getPieceList(friendlyColour, PIECE_KNIGHT);
+        const bool unconstrained = !inCheck && !pinsExistInPosition;
+
+        if (unconstrained) {
+            for (int i = 0; i < knightSquares.count(); ++i) {
+                const int knightSquare = knightSquares[i];
+                const auto& knightMoveList = PrecomputedMoveData::getKnightMoves(knightSquare);
+                for (uint8_t toSquare : knightMoveList) {
+                    const uint64_t toMask = (1ULL << toSquare);
+                    if (friendlyOccupancy & toMask) continue;
+                    const bool isCapture = (opponentOccupancy & toMask) != 0;
+                    if (!genQuiets && !isCapture) continue;
+                    if (isCapture) addCaptureMove(*board, knightSquare, toSquare);
+                    else addQuietMove(*board, knightSquare, toSquare);
+                }
+            }
+            return;
+        }
 
         for (int i = 0; i < knightSquares.count(); ++i) {
             const int knightSquare = knightSquares[i];
-            if (isPinnedFunc(knightSquare)) {
-                continue;
-            }
+            if (isPinnedFunc(knightSquare)) continue;
 
-            const auto knightMoveList = PrecomputedMoveData::getKnightMoves(knightSquare);
+            const auto& knightMoveList = PrecomputedMoveData::getKnightMoves(knightSquare);
             for (uint8_t toSquare : knightMoveList) {
                 uint64_t toMask = (1ULL << toSquare);
 
                 if (friendlyOccupancy & toMask) continue;
 
                 const bool isCapture = (opponentOccupancy & toMask) != 0;
-                if (!genQuiets && !isCapture) {
-                    continue;
-                }
+                if (!genQuiets && !isCapture) continue;
 
-                if (inCheck && !squareIsInCheckRay(toSquare)) {
-                    continue;
-                }
+                if (inCheck && !squareIsInCheckRay(toSquare)) continue;
 
-                if (isCapture) {
-                    addCaptureMove(*board, knightSquare, toSquare);
-                } else {
-                    addQuietMove(*board, knightSquare, toSquare);
-                }
+                if (isCapture) addCaptureMove(*board, knightSquare, toSquare);
+                else addQuietMove(*board, knightSquare, toSquare);
             }
         }
     }
 
     void MoveGenerator::generatePawnMoves() {
-        uint64_t allOccupancy = board->getMainBoard();
-        uint64_t opponentOccupancy = board->getOccupancy(opponentColour);
-
         const auto& pawnSquares = board->getPieceList(friendlyColour, PIECE_PAWN);
         const int pushDir = (friendlyColour == COLOR_WHITE) ? 8 : -8;
         const int captureRank = (friendlyColour == COLOR_WHITE) ? 6 : 1;
         const int startRank = (friendlyColour == COLOR_WHITE) ? 1 : 6;
+        const bool unconstrained = !inCheck && !pinsExistInPosition;
+
+        if (unconstrained) {
+            for (int i = 0; i < pawnSquares.count(); ++i) {
+                const int pawnSquare = pawnSquares[i];
+                const int pawnRank = BoardRepresentation::RankIndex(pawnSquare);
+                const bool oneStepFromPromotion = (pawnRank == captureRank);
+
+                if (genQuiets) {
+                    const int pushSquare = pawnSquare + pushDir;
+                    if (pushSquare >= 0 && pushSquare < 64) {
+                        const uint64_t pushMask = (1ULL << pushSquare);
+                        if (!(allOccupancy & pushMask)) {
+                            if (oneStepFromPromotion) {
+                                makePromotionMoves(pawnSquare, pushSquare);
+                            } else {
+                                addPawnMove(*board, pawnSquare, pushSquare);
+                            }
+
+                            if (pawnRank == startRank) {
+                                const int doubleSquare = pawnSquare + 2 * pushDir;
+                                const uint64_t doubleMask = (1ULL << doubleSquare);
+                                if (!(allOccupancy & doubleMask)) {
+                                    addMove(Move(pawnSquare, doubleSquare, Move::Flag::PawnTwoForward));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const auto& pawnAttacks = (friendlyColour == COLOR_WHITE) ?
+                    PrecomputedMoveData::getPawnAttacksWhite(pawnSquare) :
+                    PrecomputedMoveData::getPawnAttacksBlack(pawnSquare);
+
+                for (int captureSquare : pawnAttacks) {
+                    const uint64_t captureMask = (1ULL << captureSquare);
+
+                    if (opponentOccupancy & captureMask) {
+                        if (oneStepFromPromotion) {
+                            makePromotionMoves(pawnSquare, captureSquare);
+                        } else {
+                            addPawnCaptureMove(*board, pawnSquare, captureSquare, board->getPieceTypeAt(captureSquare));
+                        }
+                    }
+
+                    if (board->getEnPas() == captureSquare) {
+                        const int epCapturedPawnSquare = captureSquare + ((friendlyColour == COLOR_WHITE) ? -8 : 8);
+                        if (!inCheckAfterEnPassant(pawnSquare, captureSquare, epCapturedPawnSquare)) {
+                            addEnPassantMove(*board, pawnSquare, captureSquare);
+                        }
+                    }
+                }
+            }
+            return;
+        }
 
         for (int i = 0; i < pawnSquares.count(); ++i) {
             const int pawnSquare = pawnSquares[i];
             const int pawnRank = BoardRepresentation::RankIndex(pawnSquare);
             const bool oneStepFromPromotion = (pawnRank == captureRank);
             const bool isPinned = isPinnedFunc(pawnSquare);
+            const uint64_t pinLine = isPinned ? pinLineBitmaskBySquare[pawnSquare] : 0ULL;
 
             if (genQuiets) {
                 const int pushSquare = pawnSquare + pushDir;
                 if (pushSquare >= 0 && pushSquare < 64) {
                     const uint64_t pushMask = (1ULL << pushSquare);
                     if (!(allOccupancy & pushMask)) {
-                        if (!isPinned || isMovingAlongRay(pushDir, pawnSquare, friendlyKingSquare)) {
+                        if (!isPinned || (pinLine & pushMask)) {
                             if (!inCheck || squareIsInCheckRay(pushSquare)) {
                                 if (oneStepFromPromotion) {
                                     makePromotionMoves(pawnSquare, pushSquare);
@@ -622,8 +743,7 @@ namespace Chess {
                 PrecomputedMoveData::getPawnAttacksBlack(pawnSquare);
 
             for (int captureSquare : pawnAttacks) {
-                const int captureOffset = captureSquare - pawnSquare;
-                if (isPinned && !isMovingAlongRay(captureOffset, friendlyKingSquare, pawnSquare)) {
+                if (isPinned && (pinLine & (1ULL << captureSquare)) == 0ULL) {
                     continue;
                 }
 
@@ -634,11 +754,8 @@ namespace Chess {
                         continue;
                     }
 
-                    if (oneStepFromPromotion) {
-                        makePromotionMoves(pawnSquare, captureSquare);
-                    } else {
-                        addPawnCaptureMove(*board, pawnSquare, captureSquare, board->getPieceTypeAt(captureSquare));
-                    }
+                    if (oneStepFromPromotion) makePromotionMoves(pawnSquare, captureSquare);
+                    else addPawnCaptureMove(*board, pawnSquare, captureSquare, board->getPieceTypeAt(captureSquare));
                 }
 
                 if (board->getEnPas() == captureSquare) {
@@ -656,11 +773,6 @@ namespace Chess {
         addMove(Move(fromSquare, toSquare, Move::Flag::PromoteToRook));
         addMove(Move(fromSquare, toSquare, Move::Flag::PromoteToKnight));
         addMove(Move(fromSquare, toSquare, Move::Flag::PromoteToBishop));
-    }
-
-    bool MoveGenerator::isMovingAlongRay(int rayDir, int startSquare, int targetSquare) {
-        const int moveDir = PrecomputedMoveData::getDirectionOffset(startSquare, targetSquare);
-        return (moveDir == rayDir || moveDir == -rayDir);
     }
 
     bool MoveGenerator::isPinnedFunc(int square) {
@@ -708,21 +820,43 @@ namespace Chess {
     }
 
     bool MoveGenerator::inCheckAfterEnPassant(int startSquare, int targetSquare, int epCapturedPawnSquare) {
-        BoardState testBoard = *board;
-        applyEnPassantMove(testBoard, startSquare, targetSquare, epCapturedPawnSquare);
-
         const int capturingColor = board->getSide();
         const int opponentColor = capturingColor ^ 1;
-        const int friendlyKingSq = testBoard.getPieceList(capturingColor, PIECE_KING)[0];
+        const int kingSq = friendlyKingSquare;
 
-        uint64_t opponentKing = testBoard.getPieceBoards()[opponentColor][PIECE_KING];
-        if (PrecomputedMoveData::getKingMoves(friendlyKingSq) & opponentKing) return true;
+        uint64_t occ = allOccupancy;
+        occ &= ~(1ULL << startSquare);
+        occ &= ~(1ULL << epCapturedPawnSquare);
+        occ |= (1ULL << targetSquare);
 
-        return isSquareAttackedByColor(friendlyKingSq, opponentColor, testBoard);
+        const auto& pieces = board->getPieceBoards();
+        uint64_t opponentPawns = pieces[opponentColor][PIECE_PAWN] & ~(1ULL << epCapturedPawnSquare);
+        const uint64_t opponentKnights = pieces[opponentColor][PIECE_KNIGHT];
+        const uint64_t opponentBishops = pieces[opponentColor][PIECE_BISHOP];
+        const uint64_t opponentRooks = pieces[opponentColor][PIECE_ROOK];
+        const uint64_t opponentQueens = pieces[opponentColor][PIECE_QUEEN];
+        const uint64_t opponentKing = pieces[opponentColor][PIECE_KING];
+
+        const uint64_t pawnAttackers = PrecomputedMoveData::getPawnAttackBitboard(opponentColor ^ 1, kingSq);
+        if (pawnAttackers & opponentPawns) return true;
+        if (PrecomputedMoveData::getKnightAttacks(kingSq) & opponentKnights) return true;
+        if (PrecomputedMoveData::getKingMoves(kingSq) & opponentKing) return true;
+
+        const MagicEntry& rookMagic = rookMagics[kingSq];
+        const uint64_t rookBlockers = occ | ~rookMagic.mask;
+        const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+        if (rookMagic.ptr[rookIndex] & (opponentRooks | opponentQueens)) return true;
+
+        const MagicEntry& bishopMagic = bishopMagics[kingSq];
+        const uint64_t bishopBlockers = occ | ~bishopMagic.mask;
+        const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+        if (bishopMagic.ptr[bishopIndex] & (opponentBishops | opponentQueens)) return true;
+
+        return false;
     }
 
-    bool MoveGenerator::isSquareAttackedByColor(int square, int opponentColor, const BoardState& testBoard) {
-        const auto& pieceBoards = testBoard.getPieceBoards();
+    bool MoveGenerator::isSquareAttackedByColor(int square, int opponentColor, const BoardState& board) {
+        const auto& pieceBoards = board.getPieceBoards();
         uint64_t opponentPawns = pieceBoards[opponentColor][PIECE_PAWN];
         uint64_t opponentKnights = pieceBoards[opponentColor][PIECE_KNIGHT];
         uint64_t opponentBishops = pieceBoards[opponentColor][PIECE_BISHOP];
@@ -739,50 +873,25 @@ namespace Chess {
         uint64_t kingAttackBitboard = PrecomputedMoveData::getKingMoves(square);
         if (kingAttackBitboard & opponentKing) return true;
 
-        uint64_t slidingPieces = opponentBishops | opponentRooks | opponentQueens;
-        while (slidingPieces) {
-            const int attackerSq = static_cast<int>(getLSB(slidingPieces));
-            const int piece = testBoard.getPieceTypeAt(attackerSq);
+        const uint64_t occupancy = board.getMainBoard();
 
-            if ((piece == PIECE_BISHOP || piece == PIECE_QUEEN)) {
-                if (PrecomputedMoveData::getBishopMoves(attackerSq) & (1ULL << square)) {
-                    if (isPathClear(attackerSq, square, testBoard)) return true;
-                }
-            }
+        const MagicEntry& rookMagic = rookMagics[square];
+        const uint64_t rookBlockers = occupancy | ~rookMagic.mask;
+        const uint64_t rookIndex = (rookBlockers * rookMagic.magic) >> rookMagic.shift;
+        const uint64_t rookAttackSet = rookMagic.ptr[rookIndex];
+        if (rookAttackSet & (opponentRooks | opponentQueens)) {
+            return true;
+        }
 
-            if ((piece == PIECE_ROOK || piece == PIECE_QUEEN)) {
-                if (PrecomputedMoveData::getRookMoves(attackerSq) & (1ULL << square)) {
-                    if (isPathClear(attackerSq, square, testBoard)) return true;
-                }
-            }
-
-            slidingPieces &= (slidingPieces - 1);
+        const MagicEntry& bishopMagic = bishopMagics[square];
+        const uint64_t bishopBlockers = occupancy | ~bishopMagic.mask;
+        const uint64_t bishopIndex = (bishopBlockers * bishopMagic.magic) >> bishopMagic.shift;
+        const uint64_t bishopAttackSet = bishopMagic.ptr[bishopIndex];
+        if (bishopAttackSet & (opponentBishops | opponentQueens)) {
+            return true;
         }
 
         return false;
-    }
-
-    bool MoveGenerator::isPathClear(int fromSquare, int toSquare, const BoardState& testBoard) {
-        int dirOffset = PrecomputedMoveData::getDirectionOffset(fromSquare, toSquare);
-        int currentSq = fromSquare + dirOffset;
-        while (currentSq != toSquare) {
-            if (testBoard.getPieceTypeAt(currentSq) != -1) return false;
-            currentSq += dirOffset;
-        }
-        return true;
-    }
-
-    void MoveGenerator::applyEnPassantMove(BoardState& testBoard, int startSquare, int targetSquare, int epCapturedPawnSquare) {
-        const int capturingColor = testBoard.getSide();
-        const int opponentColor = capturingColor ^ 1;
-
-        testBoard.getPieceBoards()[opponentColor][PIECE_PAWN] &= ~(1ULL << epCapturedPawnSquare);
-        testBoard.updateOccupancy(epCapturedPawnSquare, opponentColor, false);
-        testBoard.clearMailboxSquare(epCapturedPawnSquare);
-        testBoard.removePieceFromList(opponentColor, PIECE_PAWN, epCapturedPawnSquare);
-
-        Move epMove(startSquare, targetSquare, Move::Flag::EnPassantCapture);
-        testBoard.makeMove(epMove);
     }
 
     void MoveGenerator::addQuietMove(const BoardState& board, int fromSquare, int toSquare) {
@@ -808,5 +917,4 @@ namespace Chess {
     bool MoveGenerator::getInCheck() const {
         return inCheck;
     }
-
 }  // namespace Chess

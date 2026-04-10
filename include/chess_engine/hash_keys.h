@@ -62,5 +62,4 @@ namespace Chess {
     extern ZobristKeys g_zobristKeys;
 
 }  // namespace Chess
-
 #endif  // HASH_KEYS_H

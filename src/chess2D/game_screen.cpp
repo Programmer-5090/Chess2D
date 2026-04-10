@@ -1,5 +1,6 @@
 #include "game_screen.h"
 #include <iostream>
+#include <sstream>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3/SDL.h>
 #include "logger.h"
@@ -18,8 +19,8 @@ namespace Chess {
     GameWindow::GameWindow(int width, int height)
         : gameBoard(std::min(width, height)), deltaTime(0.0)   // Board is always square
     {
-        if (!Logger::isInitialized()) {
-            Logger::init("logs", LogLevel::DEBUG, false);
+        if (!ChessLog::isInitialized()) {
+            ChessLog::init("logs", spdlog::level::debug);
         }
         LOG_INFO_F("[GameWindow] Creating window %dx%d", width, height);
 
@@ -56,7 +57,14 @@ namespace Chess {
         else {
             SDL_SetWindowIcon(window, icon);
         }
+        aiSettings.depth = 5;
+        aiSettings.searchTime = 2000;
         aiSettings.useThreading = true;
+        aiSettings.useIterativeDeepening = true;
+        aiSettings.useMoveOrdering = true;
+        aiSettings.evaluation.useMobilityEvaluation = true;
+        aiSettings.evaluation.useBackwardPawnPenalty = true;
+        aiSettings.evaluation.useProtectedPassedPawn = true;
     }
 
 
@@ -128,6 +136,20 @@ namespace Chess {
             update();
         }
 
+        BoardState& finalState = gameBoard.getBoardState();
+
+        std::ostringstream boardStateLog;
+        std::streambuf* originalCoutBuffer = std::cout.rdbuf(boardStateLog.rdbuf());
+        finalState.printBoardState();
+        std::cout.rdbuf(originalCoutBuffer);
+        LOG_INFO(boardStateLog.str().substr(0, boardStateLog.str().length() - 1));
+
+        std::ostringstream moveHistoryLog;
+        originalCoutBuffer = std::cout.rdbuf(moveHistoryLog.rdbuf());
+        finalState.printMoveHistory();
+        std::cout.rdbuf(originalCoutBuffer);
+        LOG_INFO(moveHistoryLog.str().substr(0, moveHistoryLog.str().length() - 1));
+
         destroy();
     }
 
@@ -138,8 +160,8 @@ namespace Chess {
         if (icon) { SDL_DestroySurface(icon);       icon = nullptr; }
         // Quit SDL_image if initialized
         SDL_Quit();
-        if (Logger::isInitialized()) {
-            Logger::shutdown();
+        if (ChessLog::isInitialized()) {
+            ChessLog::shutdown();
         }
     }
 

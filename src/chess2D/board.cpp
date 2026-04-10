@@ -154,4 +154,4 @@ namespace Chess {
     void Board::setPieceTheme(int option) {
         boardRenderer.setPieceTex(option);
     }
-}
+}  // namespace Chess
