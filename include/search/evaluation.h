@@ -16,7 +16,10 @@ namespace Chess {
     struct EvaluationOptions {
         bool useMobilityEvaluation = true;
         bool useProtectedPassedPawn = true;
-        bool useBackwardPawnPenalty = true;
+        bool usePawnStructure = true;
+        bool useKingSafety = true;
+        bool useVirtualKingMobility = true;
+        bool usePieceEvaluations = true;
         int contemptScore = 0;
     };
 
@@ -32,7 +35,13 @@ namespace Chess {
             if (options.useMobilityEvaluation) evaluation += EvaluateMobility();
             evaluation += MopUpEval();
             evaluation += EvaluateCastlingAndRookDevelopment();
-            if (options.useBackwardPawnPenalty) evaluation += EvaluatePawnStructure();
+            if (options.usePawnStructure) evaluation += EvaluatePawnStructure();
+            if (options.useKingSafety) evaluation += EvaluateKingSafety();
+            if (options.usePieceEvaluations) {
+                evaluation += EvaluateKnights();
+                evaluation += EvaluateBishops();
+                evaluation += EvaluateRooks();
+            }
             return (board.getSide() == COLOR_WHITE) ? evaluation : -evaluation;
         }
 
@@ -114,9 +123,84 @@ namespace Chess {
                 return (penalty * phase) / 24;
                 };
 
-            const int whitePenalty = sidePenalty(COLOR_WHITE);
-            const int blackPenalty = sidePenalty(COLOR_BLACK);
-            return blackPenalty - whitePenalty;
+            return sidePenalty(COLOR_WHITE) - sidePenalty(COLOR_BLACK);
+        }
+
+        int EvaluateKingSafety() const {
+            auto sideSafety = [this](int color) {
+                const int kingSq = getKingSquare(color);
+                if (kingSq < 0) return 0;
+
+                const int opponent = color ^ 1;
+                const uint64_t ownPawns = board.getPieceBoards()[color][PIECE_PAWN];
+                const uint64_t oppPawns = board.getPieceBoards()[opponent][PIECE_PAWN];
+
+                const int kingFile = BoardRepresentation::FileIndex(kingSq);
+                int penalty = 0;
+
+                // Pawn shield + (semi-)open files around king file.
+                const int nearShieldRank = (color == COLOR_WHITE) ? 1 : 6;
+                const int farShieldRank = (color == COLOR_WHITE) ? 2 : 5;
+                for (int f = std::max(0, kingFile - 1); f <= std::min(7, kingFile + 1); ++f) {
+                    const uint64_t fileMask = BoardRepresentation::fileMask(f);
+
+                    const bool hasNearShieldPawn = (ownPawns & (1ULL << (nearShieldRank * 8 + f))) != 0ULL;
+                    const bool hasFarShieldPawn = (ownPawns & (1ULL << (farShieldRank * 8 + f))) != 0ULL;
+
+                    if (!hasNearShieldPawn) penalty += KING_SHIELD_MISSING_NEAR_PAWN_PENALTY;
+                    else if (!hasFarShieldPawn) penalty += KING_SHIELD_MISSING_FAR_PAWN_PENALTY;
+
+                    const bool ownPawnOnFile = (ownPawns & fileMask) != 0ULL;
+                    const bool oppPawnOnFile = (oppPawns & fileMask) != 0ULL;
+                    if (!ownPawnOnFile && !oppPawnOnFile) penalty += KING_OPEN_FILE_PENALTY;
+                    else if (!ownPawnOnFile && oppPawnOnFile) penalty += KING_SEMI_OPEN_FILE_PENALTY;
+                }
+
+                // Pawn storm near king wing (kept lower than open-file penalties).
+                const auto& oppPawnList = board.getPieceList(opponent, PIECE_PAWN);
+                for (int i = 0; i < oppPawnList.count(); ++i) {
+                    const int sq = oppPawnList[i];
+                    const int file = BoardRepresentation::FileIndex(sq);
+                    if (file < kingFile - 1 || file > kingFile + 1) continue;
+
+                    const int rank = BoardRepresentation::RankIndex(sq);
+                    if (color == COLOR_WHITE) {
+                        if (rank <= 2) penalty += KING_PAWN_STORM_NEAR_PENALTY;
+                        else if (rank == 3) penalty += KING_PAWN_STORM_MID_PENALTY;
+                        else if (rank == 4) penalty += KING_PAWN_STORM_FAR_PENALTY;
+                    } else {
+                        if (rank >= 5) penalty += KING_PAWN_STORM_NEAR_PENALTY;
+                        else if (rank == 4) penalty += KING_PAWN_STORM_MID_PENALTY;
+                        else if (rank == 3) penalty += KING_PAWN_STORM_FAR_PENALTY;
+                    }
+                }
+
+                if (options.useVirtualKingMobility) {
+                    // Virtual mobility: queen mobility from king square as a proxy for king exposure.
+                    // Higher mobility means more open lines around the king.
+                    const uint64_t occNoKing = board.getMainBoard() & ~(1ULL << kingSq);
+                    const uint64_t ownOccNoKing = board.getOccupancy(color) & ~(1ULL << kingSq);
+                    const uint64_t virtualQueenAttacks =
+                        (bishopAttacks(kingSq, occNoKing) | rookAttacks(kingSq, occNoKing)) & ~ownOccNoKing;
+
+                    const int virtualMobility = popCount(virtualQueenAttacks);
+
+                    // Scale this term by enemy sliding material presence to reduce false positives.
+                    const int enemySliders =
+                        board.getPieceList(opponent, PIECE_BISHOP).count() +
+                        board.getPieceList(opponent, PIECE_ROOK).count() +
+                        2 * board.getPieceList(opponent, PIECE_QUEEN).count();
+
+                    penalty += (virtualMobility * enemySliders) / VIRTUAL_KING_MOBILITY_DIVISOR;
+                }
+
+                // Scale with opponent non-pawn material.
+                const int oppAttackMat = getNonPawnMaterial(opponent);
+                const int scaledPenalty = (penalty * std::clamp(oppAttackMat, 0, 3200)) / 3200;
+                return -scaledPenalty;
+            };
+
+            return sideSafety(COLOR_WHITE) - sideSafety(COLOR_BLACK);
         }
 
         int EvaluatePawnStructure() const {
@@ -145,33 +229,159 @@ namespace Chess {
                     ? (backwardStops >> 8)
                     : (backwardStops << 8);
                 
-                score -= popCount(backwardPawns) * 10;
+                score -= popCount(backwardPawns) * PAWN_BACKWARD_PENALTY;
                 
                 uint64_t openPawns = getOpenPawns(color);
-                score -= popCount(openPawns) * 16;
+                score -= popCount(openPawns) * PAWN_OPEN_PENALTY;
                 
                 uint64_t stragglerPawns = getStragglerPawns(color);
-                score -= popCount(stragglerPawns) * 15;
+                score -= popCount(stragglerPawns) * PAWN_STRAGGLER_PENALTY;
 
                 uint64_t isolatedPawns = getIsolatedPawns(color);
-                score -= popCount(isolatedPawns) * 8;
+                score -= popCount(isolatedPawns) * PAWN_ISOLATED_PENALTY;
 
                 uint64_t halfIsolatedPawns = getHalfIsolatedPawns(color);
-                score -= popCount(halfIsolatedPawns) * 4;
+                score -= popCount(halfIsolatedPawns) * PAWN_HALF_ISOLATED_PENALTY;
 
                 uint64_t doubledPawns = getDoubledPawns(color);
-                score -= popCount(doubledPawns) * 6;
+                score -= popCount(doubledPawns) * PAWN_DOUBLED_PENALTY;
 
                 uint64_t duoPawns = getPawnDuos(pawns);
-                score += popCount(duoPawns) * 6;
+                score += popCount(duoPawns) * PAWN_DUO_BONUS;
 
                 uint64_t defendedOpenPawns = getDefendedOpenPawns(color);
-                score += popCount(defendedOpenPawns) * 4;
+                score += popCount(defendedOpenPawns) * PAWN_DEFENDED_OPEN_BONUS;
                 
                 return score;
             };
             
             return evaluateSide(COLOR_WHITE) - evaluateSide(COLOR_BLACK);
+        }
+
+        int EvaluateKnights() const {
+            auto sideEval = [this](int color) {
+                int score = 0;
+                const int opponent = color ^ 1;
+                const uint64_t ownPawnAttacks = pawnAttackMap(color);
+                const int totalPawns = getTotalPawnCount();
+                const int centralRamCount = getCentralRamCount();
+
+                const auto& knights = board.getPieceList(color, PIECE_KNIGHT);
+                for (int i = 0; i < knights.count(); ++i) {
+                    const int sq = knights[i];
+                    const uint64_t sqMask = (1ULL << sq);
+
+                    // Simple outpost: on opponent half, defended by pawn, not attackable by enemy pawns.
+                    const int rank = BoardRepresentation::RankIndex(sq);
+                    const bool onOpponentHalf = (color == COLOR_WHITE) ? (rank >= 4) : (rank <= 3);
+                    const bool pawnDefended = (ownPawnAttacks & sqMask) != 0ULL;
+                    const bool enemyPawnCanChallenge = isSquareInPawnFrontSpan(opponent, sq);
+                    if (onOpponentHalf && pawnDefended && !enemyPawnCanChallenge) {
+                        score += KNIGHT_OUTPOST_BONUS;
+                    }
+
+                    // Knights get weaker as pawns disappear.
+                    score += (totalPawns - KNIGHT_PAWN_SCALE_BASE);
+
+                    // Closed center (many rams) favors knights.
+                    score += centralRamCount * KNIGHT_CLOSED_CENTER_BONUS_PER_RAM;
+
+                    // Penalty for minor piece not defended by a pawn.
+                    if (!pawnDefended) score -= MINOR_UNDEFENDED_BY_PAWN_PENALTY;
+                }
+
+                return score;
+            };
+
+            return sideEval(COLOR_WHITE) - sideEval(COLOR_BLACK);
+        }
+
+        int EvaluateBishops() const {
+            auto sideEval = [this](int color) {
+                int score = 0;
+                const int opponent = color ^ 1;
+                const uint64_t ownPawns = board.getPieceBoards()[color][PIECE_PAWN];
+                const uint64_t ownPawnAttacks = pawnAttackMap(color);
+                const int centralRamCount = getCentralRamCount();
+
+                const auto& bishops = board.getPieceList(color, PIECE_BISHOP);
+                const auto& ownKnights = board.getPieceList(color, PIECE_KNIGHT);
+                const auto& oppBishops = board.getPieceList(opponent, PIECE_BISHOP);
+                const auto& oppKnights = board.getPieceList(opponent, PIECE_KNIGHT);
+
+                // Bishop pair.
+                if (bishops.count() >= 2) score += BISHOP_PAIR_BONUS;
+
+                // Bishop vs knight preference shifts with center openness.
+                const int openness = 4 - std::min(4, centralRamCount);
+                score += (bishops.count() - ownKnights.count()) * openness;
+                score -= (oppBishops.count() - oppKnights.count()) * openness;
+
+                for (int i = 0; i < bishops.count(); ++i) {
+                    const int sq = bishops[i];
+                    const uint64_t sqMask = (1ULL << sq);
+
+                    // Bad bishop: low mobility + many own pawns on same color squares.
+                    const uint64_t attacks = bishopAttacks(sq, board.getMainBoard()) & ~board.getOccupancy(color);
+                    const int mob = popCount(attacks);
+                    const bool light = isLightSquare(sq);
+                    const int ownPawnsSameColor = countPawnsOnColor(ownPawns, light);
+                    if (mob <= BAD_BISHOP_MOBILITY_THRESHOLD && ownPawnsSameColor >= BAD_BISHOP_SAME_COLOR_PAWN_THRESHOLD) {
+                        score -= BAD_BISHOP_PENALTY;
+                    }
+
+                    // In blocked centers bishops are generally less effective.
+                    score -= centralRamCount * BISHOP_BLOCKED_CENTER_PENALTY_PER_RAM;
+
+                    if (isFianchettoBishop(sq, color, ownPawns)) {
+                        score += FIANCHETTO_BISHOP_BONUS;
+                    }
+
+                    // Penalty for minor piece not defended by a pawn.
+                    if ((ownPawnAttacks & sqMask) == 0ULL) score -= MINOR_UNDEFENDED_BY_PAWN_PENALTY;
+                }
+
+                return score;
+            };
+
+            return sideEval(COLOR_WHITE) - sideEval(COLOR_BLACK);
+        }
+
+        int EvaluateRooks() const {
+            auto sideEval = [this](int color) {
+                int score = 0;
+                const int opponent = color ^ 1;
+                const uint64_t ownPawns = board.getPieceBoards()[color][PIECE_PAWN];
+                const uint64_t oppPawns = board.getPieceBoards()[opponent][PIECE_PAWN];
+                const int totalPawns = getTotalPawnCount();
+
+                const auto& rooks = board.getPieceList(color, PIECE_ROOK);
+                for (int i = 0; i < rooks.count(); ++i) {
+                    const int sq = rooks[i];
+                    const int file = BoardRepresentation::FileIndex(sq);
+                    const int rank = BoardRepresentation::RankIndex(sq);
+                    const uint64_t fileMask = BoardRepresentation::fileMask(file);
+
+                    const bool ownPawnOnFile = (ownPawns & fileMask) != 0ULL;
+                    const bool oppPawnOnFile = (oppPawns & fileMask) != 0ULL;
+
+                    // Rook on open / semi-open file.
+                    if (!ownPawnOnFile && !oppPawnOnFile) score += ROOK_OPEN_FILE_BONUS;
+                    else if (!ownPawnOnFile && oppPawnOnFile) score += ROOK_SEMI_OPEN_FILE_BONUS;
+
+                    // Rook on 7th rank.
+                    if ((color == COLOR_WHITE && rank == 6) || (color == COLOR_BLACK && rank == 1)) {
+                        score += ROOK_SEVENTH_RANK_BONUS;
+                    }
+
+                    // Rooks get stronger as pawns disappear.
+                    score += (ROOK_PAWN_SCALE_BASE - totalPawns);
+                }
+
+                return score;
+            };
+
+            return sideEval(COLOR_WHITE) - sideEval(COLOR_BLACK);
         }
 
         int EvaluateMobility() const {
@@ -242,7 +452,7 @@ namespace Chess {
 
                 const auto& bishops = board.getPieceList(color, PIECE_BISHOP);
                 for (int i = 0; i < bishops.count(); ++i) {
-                    const uint64_t attacks = bishopAttacks(bishops[i], occ) & ~ownOcc;
+                    const uint64_t attacks = bishopAttacks(bishops[i], slidingOcc) & ~ownOcc;
                     kingAttackPressure += popCount(attacks & kingRing);
                     score += mobilityScore(attacks) * 4;
                 }
@@ -256,7 +466,7 @@ namespace Chess {
 
                 const auto& queens = board.getPieceList(color, PIECE_QUEEN);
                 for (int i = 0; i < queens.count(); ++i) {
-                    const uint64_t attacks = (bishopAttacks(queens[i], occ) | rookAttacks(queens[i], occ)) & ~ownOcc;
+                    const uint64_t attacks = (bishopAttacks(queens[i], slidingOcc) | rookAttacks(queens[i], slidingOcc)) & ~ownOcc;
                     kingAttackPressure += popCount(attacks & kingRing);
                     score += mobilityScore(attacks) * (1 + (24 - phase) / 8);
                 }
@@ -551,22 +761,6 @@ namespace Chess {
             return doubled;
         }
 
-        static uint64_t eastOne(uint64_t bb) {
-            return (bb << 1) & ~FILE_A;
-        }
-
-        static uint64_t westOne(uint64_t bb) {
-            return (bb >> 1) & ~FILE_H;
-        }
-
-        static uint64_t pawnsWithEastNeighbors(uint64_t pawns) {
-            return pawns & westOne(pawns);
-        }
-
-        static uint64_t pawnsWithWestNeighbors(uint64_t pawns) {
-            return pawns & eastOne(pawns);
-        }
-
         static uint64_t getPawnDuos(uint64_t pawns) {
             // Exclusive duo set (pairs, excluding trio/quart core members)
             const uint64_t withWestNeighbors = pawnsWithWestNeighbors(pawns);
@@ -585,6 +779,78 @@ namespace Chess {
             const uint64_t openPawns = getOpenPawns(color);
             const uint64_t ownPawnAttacks = pawnAttackMap(color);
             return openPawns & ownPawnAttacks;
+        }
+
+        uint64_t getPawnRams(int color) const {
+            const uint64_t wpawns = board.getPieceBoards()[COLOR_WHITE][PIECE_PAWN];
+            const uint64_t bpawns = board.getPieceBoards()[COLOR_BLACK][PIECE_PAWN];
+            if (color == COLOR_WHITE) return southOne(bpawns) & wpawns;
+            return northOne(wpawns) & bpawns;
+        }
+
+        static uint64_t northOne(uint64_t bb) {
+            return bb << 8;
+        }
+
+        static uint64_t southOne(uint64_t bb) {
+            return bb >> 8;
+        }
+
+        static uint64_t eastOne(uint64_t bb) {
+            return (bb << 1) & ~FILE_A;
+        }
+
+        static uint64_t westOne(uint64_t bb) {
+            return (bb >> 1) & ~FILE_H;
+        }
+
+        static uint64_t pawnsWithEastNeighbors(uint64_t pawns) {
+            return pawns & westOne(pawns);
+        }
+
+        static uint64_t pawnsWithWestNeighbors(uint64_t pawns) {
+            return pawns & eastOne(pawns);
+        }
+
+        bool isSquareInPawnFrontSpan(int color, int square) const {
+            const auto& pawns = board.getPieceList(color, PIECE_PAWN);
+            const uint64_t sqMask = (1ULL << square);
+            for (int i = 0; i < pawns.count(); ++i) {
+                if (getPawnAttackSpan(pawns[i], color) & sqMask) return true;
+            }
+            return false;
+        }
+
+        static bool isLightSquare(int square) {
+            const int file = BoardRepresentation::FileIndex(square);
+            const int rank = BoardRepresentation::RankIndex(square);
+            return BoardRepresentation::LightSquare(file, rank);
+        }
+
+        static int countPawnsOnColor(uint64_t pawns, bool lightSquares) {
+            int count = 0;
+            while (pawns) {
+                const int sq = popLSB(pawns);
+                if (isLightSquare(sq) == lightSquares) ++count;
+            }
+            return count;
+        }
+
+        static bool isFianchettoBishop(int square, int color, uint64_t ownPawns) {
+            const int file = BoardRepresentation::FileIndex(square);
+            const int rank = BoardRepresentation::RankIndex(square);
+
+            if (color == COLOR_WHITE) {
+                // Bg2 with g3 pawn OR Bb2 with b3 pawn
+                if (file == 6 && rank == 1) return (ownPawns & (1ULL << (2 * 8 + 6))) != 0ULL;
+                if (file == 1 && rank == 1) return (ownPawns & (1ULL << (2 * 8 + 1))) != 0ULL;
+            } else {
+                // Bg7 with g6 pawn OR Bb7 with b6 pawn
+                if (file == 6 && rank == 6) return (ownPawns & (1ULL << (5 * 8 + 6))) != 0ULL;
+                if (file == 1 && rank == 6) return (ownPawns & (1ULL << (5 * 8 + 1))) != 0ULL;
+            }
+
+            return false;
         }
 
         int toTableIndex(int square, int color) const {
@@ -610,6 +876,24 @@ namespace Chess {
             return material;
         }
 
+        int getNonPawnMaterial(int color) const {
+            int material = 0;
+            for (int pieceType = PIECE_KNIGHT; pieceType <= PIECE_QUEEN; ++pieceType) {
+                const auto& list = board.getPieceList(color, pieceType);
+                material += list.count() * getPieceValue(pieceType);
+            }
+            return material;
+        }
+
+        int getTotalPawnCount() const {
+            return popCount(board.getPieceBoards()[COLOR_WHITE][PIECE_PAWN]
+                | board.getPieceBoards()[COLOR_BLACK][PIECE_PAWN]);
+        }
+
+        int getCentralRamCount() const {
+            return popCount((getPawnRams(COLOR_WHITE) | getPawnRams(COLOR_BLACK)) & EXTENDED_CENTER_MASK);
+        }
+
         static int getPhaseIncrement(int pieceType) {
             switch (pieceType) {
             case PIECE_PAWN: return 0;
@@ -621,6 +905,43 @@ namespace Chess {
             default: return 0;
             }
         }
+
+        inline static constexpr uint64_t EXTENDED_CENTER_MASK = (0x3C3C3C3CULL << 8); // c3-f6
+
+        inline static constexpr int KING_SHIELD_MISSING_NEAR_PAWN_PENALTY = 12;
+        inline static constexpr int KING_SHIELD_MISSING_FAR_PAWN_PENALTY = 4;
+        inline static constexpr int KING_OPEN_FILE_PENALTY = 18;
+        inline static constexpr int KING_SEMI_OPEN_FILE_PENALTY = 12;
+        inline static constexpr int KING_PAWN_STORM_NEAR_PENALTY = 12;
+        inline static constexpr int KING_PAWN_STORM_MID_PENALTY = 8;
+        inline static constexpr int KING_PAWN_STORM_FAR_PENALTY = 4;
+        inline static constexpr int VIRTUAL_KING_MOBILITY_DIVISOR = 2;
+
+        inline static constexpr int PAWN_BACKWARD_PENALTY = 10;
+        inline static constexpr int PAWN_OPEN_PENALTY = 16;
+        inline static constexpr int PAWN_STRAGGLER_PENALTY = 15;
+        inline static constexpr int PAWN_ISOLATED_PENALTY = 8;
+        inline static constexpr int PAWN_HALF_ISOLATED_PENALTY = 4;
+        inline static constexpr int PAWN_DOUBLED_PENALTY = 6;
+        inline static constexpr int PAWN_DUO_BONUS = 6;
+        inline static constexpr int PAWN_DEFENDED_OPEN_BONUS = 4;
+
+        inline static constexpr int MINOR_UNDEFENDED_BY_PAWN_PENALTY = 6;
+        inline static constexpr int KNIGHT_OUTPOST_BONUS = 14;
+        inline static constexpr int KNIGHT_PAWN_SCALE_BASE = 8;
+        inline static constexpr int KNIGHT_CLOSED_CENTER_BONUS_PER_RAM = 2;
+
+        inline static constexpr int BISHOP_PAIR_BONUS = 30;
+        inline static constexpr int BAD_BISHOP_PENALTY = 14;
+        inline static constexpr int BAD_BISHOP_MOBILITY_THRESHOLD = 4;
+        inline static constexpr int BAD_BISHOP_SAME_COLOR_PAWN_THRESHOLD = 4;
+        inline static constexpr int BISHOP_BLOCKED_CENTER_PENALTY_PER_RAM = 2;
+        inline static constexpr int FIANCHETTO_BISHOP_BONUS = 8;
+
+        inline static constexpr int ROOK_OPEN_FILE_BONUS = 14;
+        inline static constexpr int ROOK_SEMI_OPEN_FILE_BONUS = 8;
+        inline static constexpr int ROOK_SEVENTH_RANK_BONUS = 12;
+        inline static constexpr int ROOK_PAWN_SCALE_BASE = 16;
 
         inline static constexpr std::array<int, 64> MG_PAWN_TABLE = {
               0,   0,   0,   0,   0,   0,   0,   0,

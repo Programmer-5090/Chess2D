@@ -46,8 +46,7 @@ namespace Chess {
 			s.logMoveOrderingMax = 32;
 			s.logRootMoveScores = false;
 			s.logDepthTiming = false;
-			s.evaluation.useMobilityEvaluation = true;
-			s.evaluation.contemptScore = 0;
+			s.evaluation.contemptScore = 8;
 			s.detectRepetitionDraw = true;
 			s.searchTime = 1000;
 			s.endlessSearch = false;

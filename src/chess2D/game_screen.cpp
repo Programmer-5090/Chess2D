@@ -60,11 +60,6 @@ namespace Chess {
         aiSettings.depth = 5;
         aiSettings.searchTime = 2000;
         aiSettings.useThreading = true;
-        aiSettings.useIterativeDeepening = true;
-        aiSettings.useMoveOrdering = true;
-        aiSettings.evaluation.useMobilityEvaluation = true;
-        aiSettings.evaluation.useBackwardPawnPenalty = true;
-        aiSettings.evaluation.useProtectedPassedPawn = true;
     }
 
 

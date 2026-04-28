@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
 
     int maxPositions = 50;
     int maxPlies = 100;
-    int depth = 4;
+    int depth = 5;
     bool renderGui = true;
     int renderDelayMs = 50;
 
@@ -257,8 +257,8 @@ int main(int argc, char** argv) {
     std::mt19937 g(rd());
     std::shuffle(fens.begin(), fens.end(), g);
 
-    EngineConfig oldEngine{ "old_eval", EvaluationOptions{ false, false, false, 8 }, false, depth, 2000 };
-    EngineConfig newEngine{"new_eval", EvaluationOptions{ true, true, true, 8 }, true, depth, 2000};
+    EngineConfig oldEngine{"old_eval", EvaluationOptions{ false, false, false, false, false, false, 8 }, false, depth, 2000 };
+    EngineConfig newEngine{"new_eval", EvaluationOptions{ true, true, true, true, true, true, 8 }, false, depth, 2000};
 
     MatchStats stats;
 

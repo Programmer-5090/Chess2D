@@ -11,6 +11,7 @@
 
 #include "board_state.h"
 #include "move.h"
+#include "magics.h"
 #include "pieces.h"
 #include "precomp_move_data.h"
 #include "evaluation.h"
@@ -268,21 +269,23 @@ namespace Chess {
         }
 
         static bool slidingAttacksSquare(int from, int target, uint64_t occ, bool bishopLike, bool rookLike) {
-            const int dir = PrecomputedMoveData::getDirection(from, target);
-            if (dir < 0) return false;
+            const uint64_t targetMask = (1ULL << target);
 
-            const bool isDiagonal = (dir >= 4);
-            if (isDiagonal && !bishopLike) return false;
-            if (!isDiagonal && !rookLike) return false;
-
-            const int step = PrecomputedMoveData::dirOffsets[dir];
-            int sq = from + step;
-            while (sq != target) {
-                if (sq < 0 || sq >= 64) return false;
-                if (occ & (1ULL << sq)) return false;
-                sq += step;
+            if (bishopLike) {
+                const MagicEntry m = bishopMagics[from];
+                const uint64_t blocking = occ | ~m.mask;
+                const uint64_t index = (blocking * m.magic) >> m.shift;
+                if (m.ptr[index] & targetMask) return true;
             }
-            return true;
+
+            if (rookLike) {
+                const MagicEntry m = rookMagics[from];
+                const uint64_t blocking = occ | ~m.mask;
+                const uint64_t index = (blocking * m.magic) >> m.shift;
+                if (m.ptr[index] & targetMask) return true;
+            }
+
+            return false;
         }
     };
 } // namespace Chess
